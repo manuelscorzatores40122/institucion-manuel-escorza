@@ -15,13 +15,13 @@ export async function POST(request) {
 
     if (!user) {
       // Return back to login with error (simplified for static Next SSR without session middleware)
-      return NextResponse.redirect(new URL('/login?error=InvalidCredentials', request.url));
+      return NextResponse.redirect(new URL('/login?error=InvalidCredentials', request.url), 303);
     }
 
     // Check pass
     const isMatch = await bcrypt.compare(contrasena, user.contrasena);
     if (!isMatch) {
-      return NextResponse.redirect(new URL('/login?error=InvalidCredentials', request.url));
+      return NextResponse.redirect(new URL('/login?error=InvalidCredentials', request.url), 303);
     }
 
     // Sign JWT
@@ -32,7 +32,7 @@ export async function POST(request) {
       .sign(secret);
 
     // Set cookie
-    const response = NextResponse.redirect(new URL('/dashboard', request.url));
+    const response = NextResponse.redirect(new URL('/dashboard', request.url), 303);
     response.cookies.set({
       name: 'auth_token',
       value: jwt,
@@ -45,6 +45,6 @@ export async function POST(request) {
     return response;
   } catch (error) {
     console.error('Login error:', error);
-    return NextResponse.redirect(new URL('/login?error=ServerError', request.url));
+    return NextResponse.redirect(new URL('/login?error=ServerError', request.url), 303);
   }
 }

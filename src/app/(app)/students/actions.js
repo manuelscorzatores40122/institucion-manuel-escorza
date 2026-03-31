@@ -43,7 +43,9 @@ export async function fetchStudentsData(filters) {
   const countRes = await query(`SELECT COUNT(*) ${baseQuery}`, queryParams);
   const total = parseInt(countRes.rows[0].count, 10);
 
-  const dataRes = await query(`SELECT * ${baseQuery} ORDER BY id DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`, [...queryParams, limit, offset]);
+  const limitIdx = paramIndex++;
+  const offsetIdx = paramIndex++;
+  const dataRes = await query(`SELECT * ${baseQuery} ORDER BY id DESC LIMIT $${limitIdx} OFFSET $${offsetIdx}`, [...queryParams, limit, offset]);
 
   // Analizar cada estudiante para graduacion
   const data = await Promise.all(dataRes.rows.map(async (st) => {
@@ -105,19 +107,24 @@ export async function fetchStudentsData(filters) {
 }
 
 export async function getFilterOptions() {
-  const currentYear = new Date().getFullYear();
-  const [anios, niveles, grados, secciones] = await Promise.all([
-    query('SELECT * FROM anios_escolares WHERE anio <= $1 ORDER BY anio DESC', [currentYear]),
-    query('SELECT * FROM niveles ORDER BY id ASC'),
-    query('SELECT * FROM grados ORDER BY id ASC'),
-    query('SELECT * FROM secciones ORDER BY id ASC')
-  ]);
-  return {
-    anios: anios.rows,
-    niveles: niveles.rows,
-    grados: grados.rows,
-    secciones: secciones.rows
-  };
+  try {
+    const currentYear = new Date().getFullYear();
+    const [anios, niveles, grados, secciones] = await Promise.all([
+      query('SELECT * FROM anios_escolares WHERE anio <= $1 ORDER BY anio DESC', [currentYear]),
+      query('SELECT * FROM niveles ORDER BY id ASC'),
+      query('SELECT * FROM grados ORDER BY id ASC'),
+      query('SELECT * FROM secciones ORDER BY id ASC')
+    ]);
+    return {
+      anios: anios.rows,
+      niveles: niveles.rows,
+      grados: grados.rows,
+      secciones: secciones.rows
+    };
+  } catch (error) {
+    console.error('Error al obtener opciones de filtro:', error);
+    return { anios: [], niveles: [], grados: [], secciones: [] };
+  }
 }
 
 export async function searchStudentByDni(dni) {

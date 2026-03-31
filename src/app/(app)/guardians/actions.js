@@ -18,48 +18,60 @@ export async function fetchGuardiansData(filters) {
     paramIndex++;
   }
 
-  const countRes = await query(`SELECT COUNT(*) ${baseQuery}`, queryParams);
-  const total = parseInt(countRes.rows[0].count, 10);
+  try {
+    const countRes = await query(`SELECT COUNT(*) ${baseQuery}`, queryParams);
+    const total = parseInt(countRes.rows[0].count, 10);
 
-  const dataRes = await query(`SELECT a.* ${baseQuery} ORDER BY id DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`, [...queryParams, limit, offset]);
+    const limitIdx = paramIndex++;
+    const offsetIdx = paramIndex++;
+    const dataRes = await query(`SELECT a.* ${baseQuery} ORDER BY id DESC LIMIT $${limitIdx} OFFSET $${offsetIdx}`, [...queryParams, limit, offset]);
 
-  // Fetch linked students for each guardian
-  const data = await Promise.all(dataRes.rows.map(async (g) => {
+    // aca lo terminas fernando la logica de  los estudiantes asociados al apoderado
+    const data = await Promise.all(dataRes.rows.map(async (g) => {
+      const students = await query(`
+        SELECT e.id, e.dni, e.nombres, e.apellido_paterno, e.apellido_materno 
+        FROM estudiantes e 
+        JOIN estudiante_apoderado ea ON e.id = ea.estudiante_id 
+        WHERE ea.apoderado_id = $1
+      `, [g.id]);
+      return { ...g, estudiantes: students.rows };
+    }));
+
+    return {
+      data,
+      total,
+      from: offset + 1,
+      to: offset + data.length,
+      last_page: Math.ceil(total / limit) || 1,
+      links: Array.from({ length: Math.ceil(total / limit) || 1 }).map((_, i) => ({
+        active: i + 1 === parseInt(page),
+        label: String(i + 1),
+        url: `?page=${i + 1}`
+      }))
+    };
+  } catch (error) {
+    console.error('Error al obtener apoderados:', error);
+    return { data: [], total: 0, from: 0, to: 0, last_page: 1, links: [] };
+  }
+}
+
+export async function searchGuardianByDni(dni) {
+  try {
+    const res = await query('SELECT * FROM apoderados WHERE dni = $1', [dni]);
+    if (!res.rows[0]) return null;
+    const guardian = res.rows[0];
     const students = await query(`
       SELECT e.id, e.dni, e.nombres, e.apellido_paterno, e.apellido_materno 
       FROM estudiantes e 
       JOIN estudiante_apoderado ea ON e.id = ea.estudiante_id 
       WHERE ea.apoderado_id = $1
-    `, [g.id]);
-    return { ...g, estudiantes: students.rows };
-  }));
-
-  return {
-    data,
-    total,
-    from: offset + 1,
-    to: offset + data.length,
-    last_page: Math.ceil(total / limit) || 1,
-    links: Array.from({ length: Math.ceil(total / limit) || 1 }).map((_, i) => ({
-      active: i + 1 === parseInt(page),
-      label: String(i + 1),
-      url: `?page=${i + 1}`
-    }))
-  };
-}
-
-export async function searchGuardianByDni(dni) {
-  const res = await query('SELECT * FROM apoderados WHERE dni = $1', [dni]);
-  if (!res.rows[0]) return null;
-  const guardian = res.rows[0];
-  const students = await query(`
-    SELECT e.id, e.dni, e.nombres, e.apellido_paterno, e.apellido_materno 
-    FROM estudiantes e 
-    JOIN estudiante_apoderado ea ON e.id = ea.estudiante_id 
-    WHERE ea.apoderado_id = $1
-  `, [guardian.id]);
-  guardian.estudiantes = students.rows;
-  return guardian;
+    `, [guardian.id]);
+    guardian.estudiantes = students.rows;
+    return guardian;
+  } catch (error) {
+    console.error('Error al buscar apoderado por DNI:', error);
+    return null;
+  }
 }
 
 export async function saveGuardian(data) {
@@ -107,7 +119,12 @@ export async function saveGuardian(data) {
 }
 
 export async function deleteGuardian(id) {
-  await query('DELETE FROM apoderados WHERE id = $1', [id]);
-  revalidatePath('/guardians');
-  return { success: true };
+  try {
+    await query('DELETE FROM apoderados WHERE id = $1', [id]);
+    revalidatePath('/guardians');
+    return { success: true };
+  } catch (error) {
+    console.error('Error al eliminar apoderado:', error);
+    throw new Error('No se pudo eliminar el apoderado. Puede tener registros asociados.');
+  }
 }

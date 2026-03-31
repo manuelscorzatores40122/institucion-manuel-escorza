@@ -4,15 +4,25 @@ import { query } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
 export async function getUsers() {
-  const res = await query('SELECT id, nombre_usuario FROM usuarios ORDER BY id DESC');
-  return res.rows;
+  try {
+    const res = await query('SELECT id, nombre_usuario FROM usuarios ORDER BY id DESC');
+    return res.rows;
+  } catch (error) {
+    console.error('Error al obtener usuarios:', error);
+    return [];
+  }
 }
-
+// fernando la logica de los usuarios esta incompleta completa la logica de los usuarios
 export async function deleteUser(id) {
   if (id === 1 || id === '1') throw new Error('Cannot delete admin'); // basic protection
-  await query('DELETE FROM usuarios WHERE id = $1', [id]);
-  revalidatePath('/users');
-  return { success: true };
+  try {
+    await query('DELETE FROM usuarios WHERE id = $1', [id]);
+    revalidatePath('/users');
+    return { success: true };
+  } catch (error) {
+    console.error('Error al eliminar usuario:', error);
+    throw new Error('No se pudo eliminar el usuario.');
+  }
 }
 
 export async function saveUser(nombre_usuario, contrasena) {

@@ -4,47 +4,70 @@ import { query } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
 export async function getEnrollments() {
-  const q = `
-    SELECT m.id, m.fecha_matricula, e.dni, e.nombres, e.apellido_paterno, e.apellido_materno,
-           s.nombre as seccion, g.nombre as grado, n.nombre as nivel, a.anio
-    FROM matriculas m
-    JOIN estudiantes e ON m.estudiante_id = e.id
-    JOIN secciones s ON m.seccion_id = s.id
-    JOIN grados g ON m.grado_id = g.id
-    JOIN niveles n ON g.nivel_id = n.id
-    JOIN anios_escolares a ON m.anio_id = a.id
-    ORDER BY m.id DESC LIMIT 50
-  `;
-  const res = await query(q);
-  return res.rows;
+  try {
+    const q = `
+      SELECT m.id, m.fecha_matricula, e.dni, e.nombres, e.apellido_paterno, e.apellido_materno,
+             s.nombre as seccion, g.nombre as grado, n.nombre as nivel, a.anio
+      FROM matriculas m
+      JOIN estudiantes e ON m.estudiante_id = e.id
+      JOIN secciones s ON m.seccion_id = s.id
+      JOIN grados g ON m.grado_id = g.id
+      JOIN niveles n ON g.nivel_id = n.id
+      JOIN anios_escolares a ON m.anio_id = a.id
+      ORDER BY m.id DESC LIMIT 50
+    `;
+    const res = await query(q);
+    return res.rows;
+  } catch (error) {
+    console.error('Error al obtener matriculas:', error);
+    return [];
+  }
 }
 
 export async function getActiveYear() {
-  const currentYear = new Date().getFullYear();
-  // En Laravel, el año activo se pasaba automáticamente. Retornamos el último hasta el año actual.
-  const res = await query('SELECT * FROM anios_escolares WHERE anio <= $1 ORDER BY anio DESC LIMIT 1', [currentYear]);
-  if(!res.rows[0]) {
-    // Si no hay año escolar lo creamos (año actual por defecto)
-    const inserted = await query('INSERT INTO anios_escolares (anio) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *', [currentYear]);
-    const secondFetch = await query('SELECT * FROM anios_escolares WHERE anio <= $1 ORDER BY anio DESC LIMIT 1', [currentYear]);
-    return secondFetch.rows[0];
+  try {
+    const currentYear = new Date().getFullYear();
+    const res = await query('SELECT * FROM anios_escolares WHERE anio <= $1 ORDER BY anio DESC LIMIT 1', [currentYear]);
+    if (!res.rows[0]) {
+      const inserted = await query('INSERT INTO anios_escolares (anio) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *', [currentYear]);
+      const secondFetch = await query('SELECT * FROM anios_escolares WHERE anio <= $1 ORDER BY anio DESC LIMIT 1', [currentYear]);
+      return secondFetch.rows[0];
+    }
+    return res.rows[0];
+  } catch (error) {
+    console.error('Error al obtener anio activo:', error);
+    return null;
   }
-  return res.rows[0];
 }
 
 export async function getLevels() {
-  const res = await query('SELECT * FROM niveles ORDER BY id ASC');
-  return res.rows;
+  try {
+    const res = await query('SELECT * FROM niveles ORDER BY id ASC');
+    return res.rows;
+  } catch (error) {
+    console.error('Error al obtener niveles:', error);
+    return [];
+  }
 }
 
 export async function getGradesByLevel(nivelId) {
-  const res = await query('SELECT * FROM grados WHERE nivel_id = $1 ORDER BY id ASC', [nivelId]);
-  return res.rows;
+  try {
+    const res = await query('SELECT * FROM grados WHERE nivel_id = $1 ORDER BY id ASC', [nivelId]);
+    return res.rows;
+  } catch (error) {
+    console.error('Error al obtener grados:', error);
+    return [];
+  }
 }
 
 export async function getSectionsByGrade(gradoId) {
-  const res = await query('SELECT * FROM secciones WHERE grado_id = $1 ORDER BY id ASC', [gradoId]);
-  return res.rows;
+  try {
+    const res = await query('SELECT * FROM secciones WHERE grado_id = $1 ORDER BY id ASC', [gradoId]);
+    return res.rows;
+  } catch (error) {
+    console.error('Error al obtener secciones:', error);
+    return [];
+  }
 }
 
 export async function saveEnrollment(data) {

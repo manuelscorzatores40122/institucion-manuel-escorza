@@ -1,5 +1,5 @@
 'use client';
-
+// machaca la logica de los apoderados esta incompleta completa la logica de los apoderados
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { fetchGuardiansData, deleteGuardian } from './actions';
@@ -32,7 +32,7 @@ export default function GuardiansIndexClient() {
   const handlePageChange = (page) => {
     setFilters(prev => ({ ...prev, page }));
   };
-
+  // tambien terminas la logica de eliminar apoderado
   const handleDelete = (id) => {
     setConfirmConfig({
       isOpen: true,
@@ -126,7 +126,7 @@ export default function GuardiansIndexClient() {
           </table>
         )}
       </div>
-      
+
       {!loading && (
         <div className="mt-4 d-flex justify-between align-center" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
           <div className="text-muted" style={{ fontSize: '0.9rem' }}>
@@ -134,14 +134,14 @@ export default function GuardiansIndexClient() {
           </div>
           <div className="d-flex gap-1" style={{ display: 'flex', gap: '4px' }}>
             {data.links.map((link, idx) => (
-              <button key={idx} className="btn btn-sm" 
+              <button key={idx} className="btn btn-sm"
                 disabled={!link.url}
-                style={{ 
-                  background: link.active ? 'var(--primary)' : 'white', 
+                style={{
+                  background: link.active ? 'var(--primary)' : 'white',
                   color: link.active ? 'white' : 'var(--text-color)',
                   border: '1px solid #e2e8f0',
                   opacity: !link.url ? 0.5 : 1
-                }} 
+                }}
                 onClick={() => link.url && handlePageChange(parseInt(link.label))}>
                 {link.label}
               </button>

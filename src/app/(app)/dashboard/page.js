@@ -3,39 +3,52 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 
 async function getStats() {
-  const [est, apo, mat, nivelesStats] = await Promise.all([
-    query('SELECT COUNT(*) FROM estudiantes'),
-    query('SELECT COUNT(*) FROM apoderados'),
-    query('SELECT COUNT(*) FROM matriculas'),
-    query(`
-      SELECT n.nombre, COUNT(m.id) as count
-      FROM matriculas m
-      JOIN grados g ON m.grado_id = g.id
-      JOIN niveles n ON g.nivel_id = n.id
-      GROUP BY n.nombre
-    `)
-  ]);
+  try {
+    const [est, apo, mat, nivelesStats] = await Promise.all([
+      query('SELECT COUNT(*) FROM estudiantes'),
+      query('SELECT COUNT(*) FROM apoderados'),
+      query('SELECT COUNT(*) FROM matriculas'),
+      query(`
+        SELECT n.nombre, COUNT(m.id) as count
+        FROM matriculas m
+        JOIN grados g ON m.grado_id = g.id
+        JOIN niveles n ON g.nivel_id = n.id
+        GROUP BY n.nombre
+      `)
+    ]);
 
-  let primCount = 0;
-  let secCount = 0;
-  nivelesStats.rows.forEach(row => {
-    if (row.nombre.toLowerCase() === 'primaria') primCount = parseInt(row.count, 10);
-    if (row.nombre.toLowerCase() === 'secundaria') secCount = parseInt(row.count, 10);
-  });
+    let primCount = 0;
+    let secCount = 0;
+    nivelesStats.rows.forEach(row => {
+      if (row.nombre.toLowerCase() === 'primaria') primCount = parseInt(row.count, 10);
+      if (row.nombre.toLowerCase() === 'secundaria') secCount = parseInt(row.count, 10);
+    });
 
-  const totalM = parseInt(mat.rows[0].count, 10) || 1;
-  const primPerc = Math.round((primCount / totalM) * 100) || 0;
-  const secPerc = Math.round((secCount / totalM) * 100) || 0;
+    const totalM = parseInt(mat.rows[0].count, 10) || 1;
+    const primPerc = Math.round((primCount / totalM) * 100) || 0;
+    const secPerc = Math.round((secCount / totalM) * 100) || 0;
 
-  return {
-    estudiantes: est.rows[0].count,
-    apoderados: apo.rows[0].count,
-    matriculas: parseInt(mat.rows[0].count, 10),
-    primaria_perc: primPerc,
-    secundaria_perc: secPerc,
-    primaria_count: primCount,
-    secundaria_count: secCount
-  };
+    return {
+      estudiantes: est.rows[0].count,
+      apoderados: apo.rows[0].count,
+      matriculas: parseInt(mat.rows[0].count, 10),
+      primaria_perc: primPerc,
+      secundaria_perc: secPerc,
+      primaria_count: primCount,
+      secundaria_count: secCount
+    };
+  } catch (error) {
+    console.error('Error al obtener estadisticas del dashboard:', error);
+    return {
+      estudiantes: 0,
+      apoderados: 0,
+      matriculas: 0,
+      primaria_perc: 0,
+      secundaria_perc: 0,
+      primaria_count: 0,
+      secundaria_count: 0
+    };
+  }
 }
 
 async function getUser() {

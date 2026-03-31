@@ -1,25 +1,28 @@
 -- ============================================================
---  mannuel_scorza — PostgreSQL / Neon
+-- SCRIPT COMPLETO: SCHEMA CORREGIDO + DATOS
+-- Generado automáticamente desde los Excel de matrícula 2026
 -- ============================================================
 
--- Extensión para encriptación (opcional, si usas pgcrypto)
+-- ------------------------------------------------------------
+-- EXTENSIONES
+-- ------------------------------------------------------------
 -- CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- ------------------------------------------------------------
 -- usuarios
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS usuarios (
-  id             SERIAL          PRIMARY KEY,
-  nombre_usuario VARCHAR(50)     UNIQUE NOT NULL,
-  contrasena     VARCHAR(255)    NOT NULL
+  id             SERIAL       PRIMARY KEY,
+  nombre_usuario VARCHAR(50)  UNIQUE NOT NULL,
+  contrasena     VARCHAR(255) NOT NULL
 );
 
 -- ------------------------------------------------------------
 -- niveles
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS niveles (
-  id     SERIAL       PRIMARY KEY,
-  nombre VARCHAR(50)  NOT NULL,
+  id     SERIAL      PRIMARY KEY,
+  nombre VARCHAR(50) NOT NULL,
   CONSTRAINT uq_nivel_nombre UNIQUE (nombre)
 );
 
@@ -27,9 +30,9 @@ CREATE TABLE IF NOT EXISTS niveles (
 -- grados
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS grados (
-  id       SERIAL       PRIMARY KEY,
-  nivel_id INT          NOT NULL,
-  nombre   VARCHAR(20)  NOT NULL,
+  id       SERIAL      PRIMARY KEY,
+  nivel_id INT         NOT NULL,
+  nombre   VARCHAR(20) NOT NULL,
   CONSTRAINT fk_grados_nivel    FOREIGN KEY (nivel_id) REFERENCES niveles(id),
   CONSTRAINT uq_grado_por_nivel UNIQUE (nivel_id, nombre)
 );
@@ -38,22 +41,25 @@ CREATE TABLE IF NOT EXISTS grados (
 -- secciones
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS secciones (
-  id       SERIAL      PRIMARY KEY,
-  grado_id INT         NOT NULL,
-  nombre   VARCHAR(5)  NOT NULL,
+  id       SERIAL     PRIMARY KEY,
+  grado_id INT        NOT NULL,
+  nombre   VARCHAR(5) NOT NULL,
   CONSTRAINT fk_secciones_grado   FOREIGN KEY (grado_id) REFERENCES grados(id),
   CONSTRAINT uq_seccion_por_grado UNIQUE (grado_id, nombre)
 );
 
 -- ------------------------------------------------------------
--- estudiantes
+-- estudiantes  (DNI opcional → extranjeros sin documento)
+-- Se añaden: codigo_estudiante, sexo
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS estudiantes (
   id                      SERIAL        PRIMARY KEY,
+  codigo_estudiante       VARCHAR(20)   UNIQUE,
   apellido_paterno        VARCHAR(100),
   apellido_materno        VARCHAR(100),
-  nombres                 VARCHAR(150),
-  dni                     VARCHAR(15)   UNIQUE,
+  nombres                 VARCHAR(150)  NOT NULL,
+  sexo                    CHAR(1),                  -- 'H' hombre / 'M' mujer
+  dni                     VARCHAR(15)   UNIQUE,      -- NULL permitido (extranjeros)
   celular                 VARCHAR(15),
   email                   VARCHAR(150),
   fecha_nacimiento        DATE,
@@ -77,12 +83,13 @@ CREATE TABLE IF NOT EXISTS estudiantes (
 -- anios_escolares
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS anios_escolares (
-  id   SERIAL  PRIMARY KEY,
-  anio INT     UNIQUE NOT NULL
+  id   SERIAL PRIMARY KEY,
+  anio INT    UNIQUE NOT NULL
 );
 
 -- ------------------------------------------------------------
 -- matriculas
+-- Se añaden: estado_matricula, tipo_vacante (campos del Excel)
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS matriculas (
   id              SERIAL  PRIMARY KEY,
@@ -91,6 +98,8 @@ CREATE TABLE IF NOT EXISTS matriculas (
   seccion_id      INT     NOT NULL,
   anio_id         INT     NOT NULL,
   fecha_matricula DATE,
+  estado_matricula VARCHAR(30) DEFAULT 'DEFINITIVA',
+  tipo_vacante     VARCHAR(30),
   CONSTRAINT fk_matriculas_estudiante FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id) ON DELETE CASCADE,
   CONSTRAINT fk_matriculas_grado      FOREIGN KEY (grado_id)      REFERENCES grados(id),
   CONSTRAINT fk_matriculas_seccion    FOREIGN KEY (seccion_id)    REFERENCES secciones(id),
@@ -98,56 +107,46 @@ CREATE TABLE IF NOT EXISTS matriculas (
   CONSTRAINT uq_matricula_anual       UNIQUE (estudiante_id, anio_id)
 );
 
--- ------------------------------------------------------------
--- Trigger: validar que seccion pertenece al grado (INSERT)
--- En PostgreSQL los triggers requieren una función separada
--- ------------------------------------------------------------
+-- Trigger: valida que sección pertenezca al grado
 CREATE OR REPLACE FUNCTION fn_validar_seccion_grado()
 RETURNS TRIGGER AS $$
-DECLARE
-  v_grado INT;
+DECLARE v_grado INT;
 BEGIN
-  SELECT grado_id INTO v_grado
-  FROM secciones
-  WHERE id = NEW.seccion_id;
-
+  SELECT grado_id INTO v_grado FROM secciones WHERE id = NEW.seccion_id;
   IF v_grado IS DISTINCT FROM NEW.grado_id THEN
     RAISE EXCEPTION 'La seccion no corresponde al grado indicado.';
   END IF;
-
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger para INSERT
 CREATE OR REPLACE TRIGGER trg_matricula_seccion_insert
-BEFORE INSERT ON matriculas
-FOR EACH ROW EXECUTE FUNCTION fn_validar_seccion_grado();
+  BEFORE INSERT ON matriculas FOR EACH ROW EXECUTE FUNCTION fn_validar_seccion_grado();
 
--- Trigger para UPDATE
 CREATE OR REPLACE TRIGGER trg_matricula_seccion_update
-BEFORE UPDATE ON matriculas
-FOR EACH ROW EXECUTE FUNCTION fn_validar_seccion_grado();
+  BEFORE UPDATE ON matriculas FOR EACH ROW EXECUTE FUNCTION fn_validar_seccion_grado();
 
 -- ------------------------------------------------------------
 -- apoderados
--- En PostgreSQL se usa un tipo personalizado para el ENUM
 -- ------------------------------------------------------------
-CREATE TYPE parentesco_tipo AS ENUM (
-  'padre','madre','abuelo','abuela','tio','tia',
-  'hermano','hermana','tutor_legal','otro'
-);
+DO $$ BEGIN
+  CREATE TYPE parentesco_tipo AS ENUM (
+    'padre','madre','abuelo','abuela','tio','tia',
+    'hermano','hermana','tutor_legal','otro'
+  );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS apoderados (
-  id                  SERIAL           PRIMARY KEY,
+  id                  SERIAL          PRIMARY KEY,
   apellido_paterno    VARCHAR(100),
   apellido_materno    VARCHAR(100),
   nombres             VARCHAR(150),
-  dni                 VARCHAR(15)      UNIQUE,
+  dni                 VARCHAR(15)     UNIQUE,
   celular             VARCHAR(15),
   correo              VARCHAR(150),
   domicilio           TEXT,
-  parentesco          parentesco_tipo  NOT NULL DEFAULT 'otro',
+  parentesco          parentesco_tipo NOT NULL DEFAULT 'otro',
   vive_con_estudiante BOOLEAN
 );
 
@@ -155,9 +154,9 @@ CREATE TABLE IF NOT EXISTS apoderados (
 -- estudiante_apoderado
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS estudiante_apoderado (
-  id            SERIAL  PRIMARY KEY,
-  estudiante_id INT     NOT NULL,
-  apoderado_id  INT     NOT NULL,
+  id            SERIAL PRIMARY KEY,
+  estudiante_id INT    NOT NULL,
+  apoderado_id  INT    NOT NULL,
   CONSTRAINT fk_ea_estudiante FOREIGN KEY (estudiante_id) REFERENCES estudiantes(id) ON DELETE CASCADE,
   CONSTRAINT fk_ea_apoderado  FOREIGN KEY (apoderado_id)  REFERENCES apoderados(id)  ON DELETE CASCADE,
   CONSTRAINT uq_est_apoderado UNIQUE (estudiante_id, apoderado_id)
@@ -167,7 +166,7 @@ CREATE TABLE IF NOT EXISTS estudiante_apoderado (
 -- contacto_emergencia
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS contacto_emergencia (
-  id             SERIAL  PRIMARY KEY,
+  id             SERIAL PRIMARY KEY,
   estudiante_id  INT,
   telefono       VARCHAR(15),
   con_quien_vive TEXT,
@@ -176,4331 +175,1016 @@ CREATE TABLE IF NOT EXISTS contacto_emergencia (
 
 -- ------------------------------------------------------------
 -- Usuario admin por defecto
--- (hash bcrypt idéntico al original)
 -- ------------------------------------------------------------
-INSERT INTO usuarios (nombre_usuario, contrasena)
-VALUES ('admin', '$2y$12$6Nl8XlO.X2hVfRQmF.MtxOmf7D7zIn05WvQ3VzC54vPq8fL5aT3s6')
-ON CONFLICT (nombre_usuario) DO NOTHING;
-
-
-
-SELECT * from usuarios;
-
-CREATE TABLE IF NOT EXISTS usuarios (
-  id             SERIAL PRIMARY KEY,
-  nombre_usuario VARCHAR(50)  UNIQUE NOT NULL,
-  contrasena     VARCHAR(255) NOT NULL
-);
--- Insertar o actualizar el usuario admin con la contraseña encriptada ('admin')
 INSERT INTO usuarios (nombre_usuario, contrasena)
 VALUES ('admin', '$2b$10$B3eRHHlkd7P9tkXiUTjcye8n6Y0c/g/ZNbhH.UR05QzX2x7U6EKtG')
-ON CONFLICT (nombre_usuario) DO UPDATE 
-SET contrasena = EXCLUDED.contrasena;
+ON CONFLICT (nombre_usuario) DO UPDATE SET contrasena = EXCLUDED.contrasena;
 
-
-
+INSERT INTO usuarios (nombre_usuario, contrasena)
+VALUES ('yerson', '$2b$10$DqzQDj8f7LW2oHJgE0KVTu5ujCm6bLZBOg9aKZcOcn2xHajT')
+ON CONFLICT (nombre_usuario) DO UPDATE SET contrasena = EXCLUDED.contrasena;
 
 -- ============================================================
---  DATOS INICIALES — mannuel_scorza (Neon / PostgreSQL)
---  Niveles → Grados → Secciones (A y B) → Año escolar 2026
---  + 5 estudiantes de ejemplo ya matriculados
+-- DATOS: niveles, grados, secciones, año escolar
 -- ============================================================
 
-
--- ------------------------------------------------------------
--- 1. NIVELES
--- ------------------------------------------------------------
-INSERT INTO niveles (nombre) VALUES
-  ('Primaria'),
-  ('Secundaria')
+INSERT INTO niveles (id, nombre) VALUES
+  (1, 'PRIMARIA'),
+  (2, 'SECUNDARIA')
 ON CONFLICT (nombre) DO NOTHING;
 
-
--- ------------------------------------------------------------
--- 2. GRADOS
---    Primaria  → 1ro a 6to
---    Secundaria → 1ro a 5to
--- ------------------------------------------------------------
-INSERT INTO grados (nivel_id, nombre) VALUES
-  -- Primaria (nivel_id = 1)
-  (1, '1ro'),
-  (1, '2do'),
-  (1, '3ro'),
-  (1, '4to'),
-  (1, '5to'),
-  (1, '6to'),
-  -- Secundaria (nivel_id = 2)
-  (2, '1ro'),
-  (2, '2do'),
-  (2, '3ro'),
-  (2, '4to'),
-  (2, '5to')
+INSERT INTO grados (id, nivel_id, nombre) VALUES
+  (1, 1, 'CUARTO'),
+  (2, 1, 'PRIMERO'),
+  (3, 1, 'QUINTO'),
+  (4, 1, 'SEGUNDO'),
+  (5, 1, 'SEXTO'),
+  (6, 1, 'TERCERO'),
+  (7, 2, 'CUARTO'),
+  (8, 2, 'PRIMERO'),
+  (9, 2, 'QUINTO'),
+  (10, 2, 'SEGUNDO'),
+  (11, 2, 'TERCERO')
 ON CONFLICT (nivel_id, nombre) DO NOTHING;
 
-
--- ------------------------------------------------------------
--- 3. SECCIONES — solo A y B por grado
---    Primaria  grado_id 1..6
---    Secundaria grado_id 7..11
--- ------------------------------------------------------------
-INSERT INTO secciones (grado_id, nombre) VALUES
-  -- Primaria 1ro
-  (1,'A'),(1,'B'),
-  -- Primaria 2do
-  (2,'A'),(2,'B'),
-  -- Primaria 3ro
-  (3,'A'),(3,'B'),
-  -- Primaria 4to
-  (4,'A'),(4,'B'),
-  -- Primaria 5to
-  (5,'A'),(5,'B'),
-  -- Primaria 6to
-  (6,'A'),(6,'B'),
-  -- Secundaria 1ro
-  (7,'A'),(7,'B'),
-  -- Secundaria 2do
-  (8,'A'),(8,'B'),
-  -- Secundaria 3ro
-  (9,'A'),(9,'B'),
-  -- Secundaria 4to
-  (10,'A'),(10,'B'),
-  -- Secundaria 5to
-  (11,'A'),(11,'B')
+INSERT INTO secciones (id, grado_id, nombre) VALUES
+  (1, 1, 'A'),
+  (2, 1, 'B'),
+  (3, 2, 'B'),
+  (4, 3, 'A'),
+  (5, 3, 'B'),
+  (6, 4, 'A'),
+  (7, 4, 'B'),
+  (8, 5, 'A'),
+  (9, 5, 'B'),
+  (10, 6, 'A'),
+  (11, 6, 'B'),
+  (12, 7, 'A'),
+  (13, 7, 'B'),
+  (14, 8, 'A'),
+  (15, 8, 'B'),
+  (16, 9, 'A'),
+  (17, 9, 'B'),
+  (18, 10, 'A'),
+  (19, 10, 'B'),
+  (20, 11, 'A'),
+  (21, 11, 'B')
 ON CONFLICT (grado_id, nombre) DO NOTHING;
 
-
--- ------------------------------------------------------------
--- 4. AÑOS ESCOLARES
--- ------------------------------------------------------------
-INSERT INTO anios_escolares (anio) VALUES
-  (2026),
-  (2027),
-  (2028)
+INSERT INTO anios_escolares (id, anio) VALUES (1, 2026)
 ON CONFLICT (anio) DO NOTHING;
 
-
--- ------------------------------------------------------------
--- 5. ESTUDIANTES DE EJEMPLO
--- ------------------------------------------------------------
-INSERT INTO estudiantes (
-  apellido_paterno, apellido_materno, nombres,
-  dni, celular, email, fecha_nacimiento,
-  departamento_nacimiento, provincia_nacimiento, distrito_nacimiento,
-  domicilio, egresado
-) VALUES
-  ('García',  'López',  'Lucía Fernanda', '74100001', '951000001', 'lucia.garcia@gmail.com',   '2012-03-15', 'Arequipa', 'Arequipa', 'Arequipa',       'Av. Los Rosales 123',  FALSE),
-  ('Mamani',  'Quispe', 'Carlos Andrés',  '74100002', '951000002', 'carlos.mamani@gmail.com',  '2011-07-22', 'Arequipa', 'Arequipa', 'Cerro Colorado', 'Jr. Bolívar 456',      FALSE),
-  ('Torres',  'Huanca', 'Valeria Sofia',  '74100003', '951000003', 'valeria.torres@gmail.com', '2013-11-05', 'Arequipa', 'Arequipa', 'Yanahuara',      'Calle Lima 789',       FALSE),
-  ('Condori', 'Flores', 'Diego Alonso',   '74100004', '951000004', 'diego.condori@gmail.com',  '2010-01-30', 'Arequipa', 'Arequipa', 'Miraflores',     'Av. Parra 321',        FALSE),
-  ('Vargas',  'Medina', 'Camila Beatriz', '74100005', '951000005', 'camila.vargas@gmail.com',  '2009-06-18', 'Arequipa', 'Arequipa', 'Cayma',          'Urb. La Florida 654',  FALSE)
-ON CONFLICT (dni) DO NOTHING;
-
-
--- ------------------------------------------------------------
--- 6. MATRÍCULAS (año 2026)
--- ------------------------------------------------------------
-
--- Lucía García → Primaria 4to sección A
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='74100001'
-  AND n.nombre='Primaria'   AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-
--- Carlos Mamani → Primaria 6to sección B
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='74100002'
-  AND n.nombre='Primaria'   AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-
--- Valeria Torres → Secundaria 1ro sección A
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='74100003'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-
--- Diego Condori → Secundaria 3ro sección A
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='74100004'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-
--- Camila Vargas → Secundaria 5to sección B
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='74100005'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-
-
--- ------------------------------------------------------------
--- 7. VERIFICAR
--- ------------------------------------------------------------
-SELECT
-  e.apellido_paterno || ' ' || e.apellido_materno AS apellidos,
-  e.nombres,
-  n.nombre  AS nivel,
-  g.nombre  AS grado,
-  s.nombre  AS seccion,
-  a.anio
-FROM matriculas m
-JOIN estudiantes     e ON e.id = m.estudiante_id
-JOIN grados          g ON g.id = m.grado_id
-JOIN niveles         n ON n.id = g.nivel_id
-JOIN secciones       s ON s.id = m.seccion_id
-JOIN anios_escolares a ON a.id = m.anio_id
-ORDER BY n.nombre, g.nombre, s.nombre;
-
-
-
+SELECT setval('grados_id_seq', 11);
+SELECT setval('secciones_id_seq', 21);
+SELECT setval('anios_escolares_id_seq', 1);
 
 -- ============================================================
---  INSERT estudiantes de primaria (209 alumnos)
---  + matrículas 2026 con grado y sección
+-- ESTUDIANTES: PRIMARIA (202) + SECUNDARIA (255) = 457 total
 -- ============================================================
 
--- ------------------------------------------------------------
--- 1. ESTUDIANTES
--- ------------------------------------------------------------
-INSERT INTO estudiantes (apellido_paterno, apellido_materno, nombres, dni, fecha_nacimiento, egresado)
+-- ── PRIMARIA ────────────────────────────────────────────────
+INSERT INTO estudiantes
+  (id, codigo_estudiante, apellido_paterno, apellido_materno, nombres, sexo, dni,
+   celular, email, fecha_nacimiento, departamento_nacimiento, provincia_nacimiento,
+   distrito_nacimiento, domicilio, reporte, egresado,
+   padre_dni, padre_nombres, padre_apellidos, padre_celular,
+   madre_dni, madre_nombres, madre_apellidos, madre_celular)
 VALUES
-  ('APAZA', 'HUACO', 'EMILY ROMINA', '91263829', '2019-04-01', FALSE),
-  ('CALLA', 'HUANCA', 'ARELY RUTH', '91410015', '2019-07-12', FALSE),
-  ('CARDOSO', 'ARNICA', 'CHRISTOPHER ALAN', '91538470', '2019-10-09', FALSE),
-  ('CASTRO', 'APAZA', 'ALEJANDRA ESTHER ANGELA', '91748426', '2020-02-27', FALSE),
-  ('CCANRE', 'CONDORI', 'ANYELIS MELANY', '91476018', '2019-08-29', FALSE),
-  ('CHAIÑA', 'SILVA', 'GERALD SMITH', '91692770', '2020-01-22', FALSE),
-  ('CORNEJO', 'HUILLCA', 'JHOE SAMUEL', '92947110', '2019-09-08', FALSE),
-  ('HEREDIA', 'MONTESINOS', 'EZEQUIEL ALFREDO', '91305222', '2019-04-24', FALSE),
-  ('JIMENEZ', 'QUISPE', 'YOHANNYZ ALESSIA', '91571364', '2019-11-01', FALSE),
-  ('LOPE', 'QUISPE', 'THAISA MASHIELL', '91458350', '2019-08-14', FALSE),
-  ('LOPE', 'VERA', 'KAROLAYND', '91353360', '2019-06-02', FALSE),
-  ('MALLCOHUACCHA', 'CUTIRE', 'XIOMARA ARLET', '91309723', '2019-05-05', FALSE),
-  ('MENDOZA', 'DIAZ', 'JENKO RAFAEL', '91717567', '2020-02-07', FALSE),
-  ('PANCCA', 'QUISPE', 'CÉSAR AUGUSTO', '91744485', '2020-02-24', FALSE),
-  ('PARIAPAZA', 'MAMANI', 'YEIKO THAYLOR', '91806486', '2020-03-21', FALSE),
-  ('RODRIGUEZ', 'QUISPE', 'LUIS SANTIAGO GIUSSEPE', '91693404', '2020-01-22', FALSE),
-  ('ROSAS', 'LIZANA', 'MELODY IVANNA', '91532743', '2019-10-03', FALSE),
-  ('SOTO', 'MOSCOSO', 'THAIZA ASTRID', '91342870', '2019-05-27', FALSE),
-  ('CAYRO', 'MAQUERA', 'DANJHEL OSCAR', '91513516', '2019-09-01', FALSE),
-  ('CHISI', 'GOMEZ', 'MARIA JESUS', '91571665', '2019-11-01', FALSE),
-  ('CHOCCATA', 'HOLGUIN', 'CAMILA HAILEY', '91292504', '2019-04-24', FALSE),
-  ('CUSILAIME', 'APAZA', 'ELIEL SAID', '91326990', '2019-05-14', FALSE),
-  ('DAHUA', 'CCORAHUA', 'EDUARDO MATEO ERIC', '91712232', '2020-02-04', FALSE),
-  ('HUILLCA', 'ARAGOTE', 'JHEYSON GABRIEL', '91493128', '2019-09-09', FALSE),
-  ('ILASACA', 'PAMPA', 'ADISSON ISAÍ', '91315097', '2019-05-01', FALSE),
-  ('MADARIAGA', 'YDME', 'THIAGO VALENTIN', '91624993', '2019-12-07', FALSE),
-  ('PACCO', 'QUISPE', 'ALICE DÁNAE', '91347607', '2019-05-28', FALSE),
-  ('PIZARRO', 'VILCAPAZA', 'JOSHUA EMANUEL', '91657607', '2019-12-30', FALSE),
-  ('QUEA', 'BEDOYA', 'SEGUNDO VALENTINO', '91666694', '2020-01-05', FALSE),
-  ('QUISPE', 'MAMANI', 'BRIGUITTE DIANA', '91641038', '2019-12-06', FALSE),
-  ('RAMOS', 'CCOTO', 'CAMILA NAISHA', '91373231', '2019-06-09', FALSE),
-  ('RIVERA', 'CALCINA', 'THIAGO JEYKO', '91686664', '2020-01-18', FALSE),
-  ('ROA', 'SUCASAIRE', 'DYLAN ADRIANO', '91774681', '2020-03-14', FALSE),
-  ('RUIZ', 'BRACAMONTE', 'ENRIQUE RAFAEL', '91757364', '2020-03-04', FALSE),
-  ('SEDANO', 'QUISPE', 'JHON ANDERZON', '80790672', '2019-07-13', FALSE),
-  ('TIPO', 'PACHA', 'FABIANA ALESSIA', '91434130', '2019-07-30', FALSE),
-  ('ALARCON', 'VARGAS', 'HELIO ZAID', '91189284', '2019-02-17', FALSE),
-  ('AUQUILLA', 'FONSECA', 'LUANA CRISTAL', '90829887', '2018-06-12', FALSE),
-  ('AVILA', 'USKA', 'LIAM MAEL', '91042025', '2018-10-15', FALSE),
-  ('CAMACHO', 'QQUECCAÑO', 'AILÉN KIMBERLY', '91099470', '2018-12-14', FALSE),
-  ('CANALES', 'ORMACHEA', 'EMILIA BETSABÉ', '90971291', '2018-08-24', FALSE),
-  ('COLQUE', 'TUNQUI', 'VALERIA NATHALY', '91114071', '2018-12-27', FALSE),
-  ('CUNO', 'PALOMINO', 'SUHAIL YEONGSU', '91245826', '2019-03-23', FALSE),
-  ('FRISANCHO', 'MEDINA', 'LUANA KALIESCA', '90243966', '2017-05-28', FALSE),
-  ('LOPEZ', 'MAMANI', 'MILAN GAEL', '91564605', '2019-01-28', FALSE),
-  ('MACHACA', 'COTRADO', 'LIZ DANA', '91248050', '2019-03-24', FALSE),
-  ('MAQQUERA', 'APAZA', 'MEREDITH APRIL', '90714928', '2018-04-04', FALSE),
-  ('RIVERA', 'CALCINA', 'JOSHUA GUSTAVO', '90656744', '2018-02-21', FALSE),
-  ('SEDANO', 'QUISPE', 'YHONIOR', '80790667', '2017-07-26', FALSE),
-  ('TORRES', 'CADENAS', 'FABIANA NOHELEE', '90887365', '2018-07-29', FALSE),
-  ('ANCCORI', 'CCOLQUE', 'THAIS ELIETH', '90884751', '2018-07-24', FALSE),
-  ('CCANSAYA', 'HOLGUIN', 'FREDY EVERT', '90949615', '2018-09-05', FALSE),
-  ('COAQUIRA', 'GUTIERREZ', 'BRAND EZIO', '90835578', '2018-06-19', FALSE),
-  ('CONDORI', 'PUMA', 'REY DAVID', '91191726', '2019-02-15', FALSE),
-  ('HERRERA', 'VENTURA', 'TAISSA CHRISTHELL', '90956976', '2018-08-23', FALSE),
-  ('HUAMAN', 'AMANQUI', 'THIAGO DONATITO', '90928484', '2018-08-23', FALSE),
-  ('JARA', 'ZAPATA', 'LEE JANG DAYIRO', '90742174', '2018-04-24', FALSE),
-  ('MENDOZA', 'LAZARO', 'JOSHUÉ MANUEL', '90212355', '2017-05-09', FALSE),
-  ('RIOS', 'VILCA', 'ANTONIO THIAGO', '90874795', '2018-07-13', FALSE),
-  ('TICAHUANCA', 'MERLIN', 'MESLY AYDE', '90984544', '2018-10-01', FALSE),
-  ('VENTURA', 'MACHACA', 'LIAM ULISES', '90799634', '2018-05-26', FALSE),
-  ('YUCRA', 'HUALLPA', 'LIZBETH DIANA', '91026479', '2018-10-28', FALSE),
-  ('BARRIENTOS', 'MACHACCA', 'BRIANA XIOMARA', '90416988', '2017-09-08', FALSE),
-  ('CARLOS', 'QUISPE', 'SEBASTIAN SAUL', '90207203', '2017-04-23', FALSE),
-  ('CHURA', 'BELIZARIO', 'ALLISON ARIANA', '90704175', '2018-03-31', FALSE),
-  ('CONDORI', 'PACHECO', 'GAEL SANTOS', '90704915', '2018-03-31', FALSE),
-  ('CORDOVA', 'ALARCON', 'JAZMIN ALEXSIA', '90697250', '2018-03-24', FALSE),
-  ('DAVILA', 'HUMPIRI', 'SERGIO MATEO', '90429059', '2017-06-21', FALSE),
-  ('GOMEZ', 'QUISPE', 'SANTIAGO ALONSO', '90453369', '2017-08-10', FALSE),
-  ('GONZALES', 'APAZA', 'LUIS FERNANDO', '90478120', '2017-11-03', FALSE),
-  ('MALLMA', 'MAZA', 'ANGELA ROMINA', '90525485', '2017-11-30', FALSE),
-  ('MAMANI', 'ARAPA', 'ALEXIS DAVID', '90260838', '2017-06-07', FALSE),
-  ('MAMANI', 'JARA', 'EDMIT MOISES', '90243932', '2017-05-28', FALSE),
-  ('MAMANI', 'MACEDO', 'ERICK ENRIQUE', '90584697', '2018-01-14', FALSE),
-  ('ORDOÑEZ', 'CALDERON', 'BRIDNY ANYELY', '90294284', '2017-07-01', FALSE),
-  ('PIZANGO', 'GEMAN', 'LUCIA KATTANIA', '90241540', '2017-05-29', FALSE),
-  ('QUISPE', 'BELIZARIO', 'DYLAN RODRIGO', '90649467', '2018-02-06', FALSE),
-  ('ROJAS', 'LOPEZ', 'KENETH YHAMIR', '90196369', '2017-05-01', FALSE),
-  ('VILCA', 'CONDORI', 'SANTIAGO PATRICIO', '90561391', '2017-12-26', FALSE),
-  ('ALFERES', 'TOROCAHUA', 'MATEO RUBEN', '90418476', '2017-09-14', FALSE),
-  ('BERNAL', 'ESPINOZA', 'ABIGAIL MILENA', '90457889', '2017-10-20', FALSE),
-  ('CCACCASACA', 'FOLLANO', 'LUZ MASHIEL', '90562326', '2018-01-02', FALSE),
-  ('CISNEROS', 'ARANDA', 'FERNANDA ELIZABETH', '90221665', '2017-05-14', FALSE),
-  ('CRISPIN', 'SULLCARAY', 'JHOANNA LIZ', '81386087', '2017-09-07', FALSE),
-  ('DELGADO', 'FLORES', 'LENA CRISTINE', '90487864', '2017-11-05', FALSE),
-  ('HUAYLLAPUMA', 'BUSTINCIO', 'DOMINIC LIONEL', '90207555', '2017-05-04', FALSE),
-  ('HUILLCA', 'VILCA', 'SALOMON ISAI', '90389917', '2017-08-16', FALSE),
-  ('MAMANI', 'JILAJA', 'CRISTIAN LIONEL', '90479331', '2017-10-11', FALSE),
-  ('MAMANI', 'PACCO', 'DYLAN BENJAMIN', '90391809', '2017-08-28', FALSE),
-  ('MIRANDA', 'FERNANDEZ', 'ZULLY NOEMI', '92572417', '2017-08-15', FALSE),
-  ('PACCO', 'LLAMOCA', 'THAIS SHARUMY', '90544034', '2017-12-15', FALSE),
-  ('QUISPE', 'QUISPE', 'OLIVER LIAN', '90213210', '2017-05-02', FALSE),
-  ('SEVILLANOS', 'RODRIGO', 'ZULEMA THAYSA', '90298627', '2017-07-05', FALSE),
-  ('SULLCARAY', 'TAIPE', 'SHEYLA ROSMERI', '81386086', '2017-07-21', FALSE),
-  ('ANCULLE', 'CAMARGO', 'MARIA FERNANDA', '79881852', '2016-09-04', FALSE),
-  ('APAZA', 'HUACO', 'ALONDRA SAMIRA', '79996790', '2016-12-24', FALSE),
-  ('CANALES', 'ORMACHEA', 'DANIELA SOFIA', '79562178', '2016-02-17', FALSE),
-  ('CHAMBI', 'HUAMAN', 'EIMY MADELEYNE', '79854920', '2016-09-14', FALSE),
-  ('CHIPA', 'HUAMANI', 'LUIS DANIEL', '79734408', '2016-06-18', FALSE),
-  ('CONDORI', 'CARY', 'ARJEN NALDO', '79816357', '2016-08-20', FALSE),
-  ('CONDORI', 'DIAZ', 'ELIZABETH RIHANA', '79850175', '2016-09-13', FALSE),
-  ('CUTI', 'HUILLCA', 'THIAGO JEAN PIERRE', '79751714', '2016-06-10', FALSE),
-  ('MENDOZA', 'LAZARO', 'JOSHUA CALEB', '81630580', '2015-09-01', FALSE),
-  ('PACCO', 'CCANCHILLO', 'ASHLY ANDREA', '79979480', '2016-12-04', FALSE),
-  ('PEÑA', 'VALVERDE', 'ANAHI AMANDA', '79836890', '2016-09-03', FALSE),
-  ('PONCE', 'BEDOYA', 'MARIA DEL PILAR ROSANGELA', '79745967', '2016-07-04', FALSE),
-  ('QUISPE', 'VALENCIA', 'ADRIANA ABIGAIL', '79710259', '2016-06-11', FALSE),
-  ('RODRIGUEZ', 'ANCO', 'KALEB YEREMY JUNIOR', '79973041', '2016-11-20', FALSE),
-  ('SEDANO', 'REGINALDO', 'JINIA ZOLYMAR', '79994340', '2016-12-23', FALSE),
-  ('SULLCA', 'HANCCO', 'CHRISTIAN SAUL', '90058648', '2017-02-03', FALSE),
-  ('UGARTE', 'SUNE', 'MILETT LUANA', '90128319', '2017-03-17', FALSE),
-  ('ACHULLI', 'RODRIGO', 'VALENTINA CRISTEL', '79705436', '2016-05-11', FALSE),
-  ('ANCCORI', 'CCOLQUE', 'DAIRA SHANTALE', '79898105', '2016-10-12', FALSE),
-  ('CHOQUEHUANCA', 'SUMIRE', 'JHOSEP ALEXANDER', '79864145', '2016-09-20', FALSE),
-  ('CHUMBES', 'SERRANO', 'YAIR JUNIOR', '90981845', '2017-03-28', FALSE),
-  ('CONTRERAS', 'SANTILLANA', 'BRIANNA VALERIA', '90069728', '2017-02-02', FALSE),
-  ('FAIJO', 'OVANDO', 'ADELIZ', '79647699', '2016-04-26', FALSE),
-  ('GÜERE', 'HUARCA', 'BERNHARD NEYTAN', '79884929', '2016-10-01', FALSE),
-  ('HUALLPA', 'MALLMA', 'THIAGO MATHIAS', '79878370', '2016-09-28', FALSE),
-  ('HUANACUNI', 'HUAMAN', 'ARIANA ASENET', '90058572', '2017-01-26', FALSE),
-  ('MACHACA', 'MAMANI', 'HABBIE LUANA', '90059387', '2017-01-17', FALSE),
-  ('MAMANI', 'AGUIRRE', 'JHON PATRICIO', '90032168', '2017-01-10', FALSE),
-  ('MIRANDA', 'RODRIGUEZ', 'IAN ADRIEL KEFREN', '90002899', '2016-12-28', FALSE),
-  ('PACHECO', 'RANGEL', 'JORGE', '002510532', '2016-04-07', FALSE),
-  ('PANDIA', 'PARICAHUA', 'BRYSSNEY MERLYN', '79648436', '2016-04-29', FALSE),
-  ('PROVINCIA', 'CHUQUIMAMANI', 'ESTEBAN GAEL', '90001791', '2016-12-27', FALSE),
-  ('QUISPE', 'HOLGUIN', 'DIEGO JAEL', '90050322', '2017-01-28', FALSE),
-  ('YUJRA', 'INCACUTIPA', 'LUIS ANTHONY', '79783432', '2016-08-01', FALSE),
-  ('ZAMATA', 'LAGOS', 'ESTEFANY YAMILETT', '79977015', '2016-11-30', FALSE),
-  ('ARCE', 'QUISPE', 'MIGUEL ANGEL MATEO', '79487332', '2016-01-22', FALSE),
-  ('BALBIN', 'AGÜERO', 'ALIZZ STHEFANI', '79252941', '2015-08-17', FALSE),
-  ('CHAVEZ', 'CONDORI', 'CARLOS NARCISO', '79677980', '2015-08-13', FALSE),
-  ('CONDORI', 'PUMA', 'NEYMAR WILLIAN', '79436436', '2015-12-06', FALSE),
-  ('CORDOVA', 'ALARCON', 'DALESKA FERNANDA', '79192119', '2015-06-22', FALSE),
-  ('CORNEJO', 'HUILLCA', 'SILA DAYANA', '90223138', '2015-09-19', FALSE),
-  ('FIGUEROA', 'GOMEZ', 'ALEJANDRO SEBASTIAN', '81629452', '2015-05-27', FALSE),
-  ('FRISANCHO', 'MEDINA', 'PABLO ESTEFANO', '79417320', '2015-11-26', FALSE),
-  ('HEREDIA', 'MONTESINOS', 'EDUARDO PAOLO', '79426747', '2015-10-30', FALSE),
-  ('HUAMAN', 'SILUPU', 'JOAQUIN ALADINO', '79141369', '2015-05-28', FALSE),
-  ('HUAYHUA', 'CCORAHUA', 'LIONO ANDRIW SANTIAGO', '81629231', '2015-05-17', FALSE),
-  ('MENDOZA', 'SERRANO', 'EDDY GABRIEL', '81648405', '2014-08-13', FALSE),
-  ('MIRANDA', 'CONDORI', 'KARELY ROSABEL', '79579451', '2016-03-20', FALSE),
-  ('PARI', 'CONDORI', 'JEREMY ALDAIR', '79336795', '2015-10-05', FALSE),
-  ('PAZ', 'PERALTA', 'GINEBRA BRIHANNA', '79198111', '2015-06-25', FALSE),
-  ('PONCE', 'BEDOYA', 'BRIELLA PIERINA', '79085525', '2015-04-24', FALSE),
-  ('PORTUGAL', 'OVIEDO', 'ADRIANO FACUNDO', '79167128', '2015-06-16', FALSE),
-  ('POVIS', 'PACCO', 'LISHA ISABEL', '79275315', '2015-08-07', FALSE),
-  ('QUISPE', 'BELIZARIO', 'MAYTE ADRIANA', '79550987', '2016-02-11', FALSE),
-  ('QUISPE', 'CCALLO', 'ALIZ ANYELA', '79205443', '2015-06-02', FALSE),
-  ('TULA', 'SONCCO', 'ANDREA YHOSELYN', '79219530', '2015-07-24', FALSE),
-  ('VERA', 'HANCCO', 'MERCEDES KATHERINE', '79553072', '2016-03-03', FALSE),
-  ('YUPA', 'QUISPE', 'ANTHONY FRANCISCO ALEXANDER', '79489610', '2016-01-23', FALSE),
-  ('ALARCON', 'MATUTE', 'GABRIEL ANDRE', '79094828', '2015-04-27', FALSE),
-  ('ARAPA', 'LLAVE', 'EVELYN KATALEYA', '81629051', '2015-05-05', FALSE),
-  ('CABANA', 'PUMA', 'SILVANA ANDREA', '79533533', '2016-02-11', FALSE),
-  ('CHIPANA', 'QUISPE', 'XHAVI ELISON', '81376057', '2016-02-18', FALSE),
-  ('CONDORI', 'BEJARANO', 'ADRIANO ANGEL', '79505173', '2016-02-03', FALSE),
-  ('GROVAS', 'PACCO', 'ABIGAIL MELANY', '79458372', '2016-01-03', FALSE),
-  ('HANCCO', 'APAZA', 'ANDREE ORLANDO', '79087574', '2015-04-23', FALSE),
-  ('HUANACUNI', 'HUAMAN', 'LIAN BENJAMIN', '79141962', '2015-05-29', FALSE),
-  ('LOPE', 'QUISPE', 'STELLA RISU', '79570234', '2016-03-11', FALSE),
-  ('MORALES', 'AVILES', 'GINO JHOSMANI', '79131814', '2015-05-10', FALSE),
-  ('MOTTOCCANCHI', 'AYAMAMANI', 'AXEL GAEL', '79099592', '2015-05-09', FALSE),
-  ('NAHUE', 'YALLERCCO', 'BRUNELLA ARLETH', '81523912', '2016-02-11', FALSE),
-  ('OJEDA', 'SALAS', 'NIKOLAS EZEL', '79312956', '2015-09-26', FALSE),
-  ('PACCO', 'LLAMOCA', 'FABIAN GADIEL', '79599655', '2016-03-24', FALSE),
-  ('PACHECO', 'SANCHEZ', 'BRYANA MERLYA', '79270295', '2015-08-09', FALSE),
-  ('PERALTA', 'MAMANI', 'KIARA MILAGROS', '79392791', '2015-11-19', FALSE),
-  ('ROQUE', 'TOROCAHUA', 'MARIANNE FRANCHESCA', '79243694', '2015-08-12', FALSE),
-  ('ROSAS', 'AGUILAR', 'YOSELIN CAMILA', '79565066', '2016-03-04', FALSE),
-  ('SALAS', 'BARRIOS', 'CATHALEYA VALENTINA', '79537794', '2016-02-03', FALSE),
-  ('SEDANO', 'QUISPE', 'YOLANDA', '80790662', '2015-08-13', FALSE),
-  ('SONCCO', 'COLQUE', 'TRISTAN MILAN', '79440332', '2015-12-17', FALSE),
-  ('SOTO', 'LUICHO', 'THIAGO ANDREII', '79130726', '2015-05-01', FALSE),
-  ('SULLCARAY', 'TAIPE', 'DIANA', '81292026', '2015-05-13', FALSE),
-  ('TITO', 'ALMONTE', 'INGRID ARACELY', '81639357', '2015-06-07', FALSE),
-  ('ZAPANA', 'RIVERA', 'XIOMARA RAFAELA', '79725584', '2016-03-29', FALSE),
-  ('ALEJOS', 'COSAR', 'LIAM SAYCAR', '78763866', '2014-08-03', FALSE),
-  ('BARRIOS', 'MENDEZ', 'MATHEO IGNACIO', '115948927', '2014-11-13', FALSE),
-  ('BETANCUR', 'BERROCAL', 'ERICK JOHAO', '81592131', '2014-06-02', FALSE),
-  ('CABANA', 'PUMA', 'ANGEL ARMANDO', '81594627', '2014-09-04', FALSE),
-  ('CHIPANE', 'PORTILLO', 'ANTHONY JEIKO', '81592940', '2014-07-19', FALSE),
-  ('CHUIMA', 'HUAMAN', 'MARIA ALEJANDRA', '81224009', '2014-09-11', FALSE),
-  ('HACHA', 'CONDORI', 'JONATHAN MATÍAZ', '81194877', '2013-09-14', FALSE),
-  ('HUANCA', 'CCAMA', 'NORICK SEBASTIAN', '81607687', '2014-12-06', FALSE),
-  ('MAMANI', 'MAMANI', 'MICHELLE SHARMELY', '78739807', '2014-07-17', FALSE),
-  ('MASCO', 'CEREZO', 'YAMILA FERNANDA', '78733856', '2014-08-24', FALSE),
-  ('PACCO', 'MENDOZA', 'HAFID ERICK', '79005661', '2015-03-03', FALSE),
-  ('PACHA', 'MEDINA', 'LUCIANA GUADALUPE', '81592868', '2014-07-23', FALSE),
-  ('PACO', 'ZUÑIGA', 'DANILO JOSÉ', '79024345', '2015-03-19', FALSE),
-  ('PEÑA', 'VALVERDE', 'LEYDI YANIRA', '78916158', '2014-12-18', FALSE),
-  ('ROQUE', 'CCORAHUA', 'BRITHANI VALERIA', '78747362', '2014-08-30', FALSE),
-  ('TARIFA', 'SURCO', 'FLOR KARELY', '81630667', '2014-09-27', FALSE),
-  ('VALDIVIA', 'CHUQUITAYPE', 'DAYRON HENRRY', '78211225', '2013-07-22', FALSE),
-  ('YUPANQUI', 'MAMANI', 'JUDITH KATIA', '79030875', '2015-03-21', FALSE),
-  ('APFATA', 'BUSTINCIO', 'ROY BENJAMIN', '81603582', '2014-12-01', FALSE),
-  ('BORJA', 'VARGAS', 'GIOVANNI ELAR', '78710269', '2014-08-08', FALSE),
-  ('CHAMPI', 'CUTIRE', 'JHORDAN ALDAIR', '81594820', '2014-10-03', FALSE),
-  ('ESPINOZA', 'BETANCUR', 'MAX JOSUÉ', '78985024', '2015-02-15', FALSE),
-  ('HERRERA', 'VENTURA', 'VALENTINA JAZMIN', '78774815', '2014-08-15', FALSE),
-  ('HUARMIYURI', 'SILVA', 'ALEXIS ADRIANO', '79137760', '2015-01-22', FALSE),
-  ('LAURA', 'ADRIAN', 'PRISCILA', '81550127', '2014-06-13', FALSE),
-  ('LOPEZ', 'MAMANI', 'ANGEL URIEL', '78862650', '2013-08-05', FALSE),
-  ('MAMANI', 'CCANSAYA', 'GARET NEYMAR', '78601988', '2014-05-20', FALSE),
-  ('MAYTA', 'MACHACCA', 'SOELENG GEORGHET', '81594240', '2014-07-24', FALSE),
-  ('SOLORZANO', 'SAMATA', 'LEYDI YOELINA', '78586368', '2014-04-29', FALSE),
-  ('TINOCO', 'CALCINA', 'MIGUEL ALBERTO', '81594436', '2014-06-26', FALSE),
-  ('UTURUNCO', 'INQUILLAY', 'ROGER', '79063886', '2014-04-30', FALSE),
-  ('VALENCIA', 'MALLMA', 'LIAM RAFAEL', '78731961', '2014-08-25', FALSE)
-ON CONFLICT (dni) DO NOTHING;
+  (1, '24022573000050', 'CAYRO', 'MAQUERA', 'DANJHEL OSCAR', 'H', '91513516', NULL, NULL, '2019-09-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (2, '23022575500070', 'CHISI', 'GOMEZ', 'MARIA JESUS', 'M', '91571665', NULL, NULL, '2019-11-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (3, '23133881300010', 'CHOCCATA', 'HOLGUIN', 'CAMILA HAILEY', 'M', '91292504', NULL, NULL, '2019-04-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (4, '23022575500200', 'CUSILAIME', 'APAZA', 'ELIEL SAID', 'H', '91326990', NULL, NULL, '2019-05-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (5, '23145554200120', 'DAHUA', 'CCORAHUA', 'EDUARDO MATEO ERIC', 'H', '91712232', NULL, NULL, '2020-02-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (6, '23176826600010', 'HUILLCA', 'ARAGOTE', 'JHEYSON GABRIEL', 'H', '91493128', NULL, NULL, '2019-09-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (7, '20242019131444', 'ILASACA', 'PAMPA', 'ADISSON ISAÍ', 'H', '91315097', NULL, NULL, '2019-05-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (8, '23022575500030', 'MADARIAGA', 'YDME', 'THIAGO VALENTIN', 'H', '91624993', NULL, NULL, '2019-12-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (9, '20242019111908', 'OVIEDO', 'FERNÁNDEZ', 'DENNYSMAR DEL VALLE', 'M', NULL, NULL, NULL, '2019-09-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (10, '23022551600240', 'PACCO', 'QUISPE', 'ALICE DÁNAE', 'M', '91347607', NULL, NULL, '2019-05-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (11, '23022575500060', 'PIZARRO', 'VILCAPAZA', 'JOSHUA EMANUEL', 'H', '91657607', NULL, NULL, '2019-12-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (12, '23022551600110', 'QUEA', 'BEDOYA', 'SEGUNDO VALENTINO', 'H', '91666694', NULL, NULL, '2020-01-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (13, '23022568000990', 'QUISPE', 'MAMANI', 'BRIGUITTE DIANA', 'M', '91641038', NULL, NULL, '2019-12-06', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (14, '23022575500050', 'RAMOS', 'CCOTO', 'CAMILA NAISHA', 'M', '91373231', NULL, NULL, '2019-06-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (15, '23052398500020', 'RIVERA', 'CALCINA', 'THIAGO JEYKO', 'H', '91686664', NULL, NULL, '2020-01-18', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (16, '24123947400010', 'ROA', 'SUCASAIRE', 'DYLAN ADRIANO', 'H', '91774681', NULL, NULL, '2020-03-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (17, '24022508600190', 'RUIZ', 'BRACAMONTE', 'ENRIQUE RAFAEL', 'H', '91757364', NULL, NULL, '2020-03-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (18, '00000080790672', 'SEDANO', 'QUISPE', 'JHON ANDERZON', 'H', '80790672', NULL, NULL, '2019-07-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (19, '23089348700180', 'TIPO', 'PACHA', 'FABIANA ALESSIA', 'M', '91434130', NULL, NULL, '2019-07-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (20, '00000091189284', 'ALARCON', 'VARGAS', 'HELIO ZAID', 'H', '91189284', NULL, NULL, '2019-02-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (21, '22072323900198', 'AUQUILLA', 'FONSECA', 'LUANA CRISTAL', 'M', '90829887', NULL, NULL, '2018-06-12', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (22, '00000091042025', 'AVILA', 'USKA', 'LIAM MAEL', 'H', '91042025', NULL, NULL, '2018-10-15', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (23, '23123948200010', 'CAMACHO', 'QQUECCAÑO', 'AILÉN KIMBERLY', 'M', '91099470', NULL, NULL, '2018-12-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (24, '00000090971291', 'CANALES', 'ORMACHEA', 'EMILIA BETSABÉ', 'M', '90971291', NULL, NULL, '2018-08-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (25, '23022573000050', 'COLQUE', 'TUNQUI', 'VALERIA NATHALY', 'M', '91114071', NULL, NULL, '2018-12-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (26, '00000091245826', 'CUNO', 'PALOMINO', 'SUHAIL YEONGSU', 'M', '91245826', NULL, NULL, '2019-03-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (27, '25021929500020', 'DELGADO', 'SOTO', 'YOCKZIN ALEJANDRO', 'H', NULL, NULL, NULL, '2017-05-25', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (28, '00000090243966', 'FRISANCHO', 'MEDINA', 'LUANA KALIESCA', 'M', '90243966', NULL, NULL, '2017-05-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (29, '23145554200150', 'LOPEZ', 'MAMANI', 'MILAN GAEL', 'H', '91564605', NULL, NULL, '2019-01-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (30, '00000091248050', 'MACHACA', 'COTRADO', 'LIZ DANA', 'M', '91248050', NULL, NULL, '2019-03-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (31, '22132783200030', 'MAQQUERA', 'APAZA', 'MEREDITH APRIL', 'M', '90714928', NULL, NULL, '2018-04-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (32, '00000090656744', 'RIVERA', 'CALCINA', 'JOSHUA GUSTAVO', 'H', '90656744', NULL, NULL, '2018-02-21', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (33, '25021929500010', 'ROSALES', 'VARGAS', 'ALESKA SOPHIA', 'M', NULL, NULL, NULL, '2018-12-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (34, '21165543000028', 'SEDANO', 'QUISPE', 'YHONIOR', 'H', '80790667', NULL, NULL, '2017-07-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (35, '00000090887365', 'TORRES', 'CADENAS', 'FABIANA NOHELEE', 'M', '90887365', NULL, NULL, '2018-07-29', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (36, '20242018132500', 'ANCCORI', 'CCOLQUE', 'THAIS ELIETH', 'M', '90884751', NULL, NULL, '2018-07-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (37, '00000090949615', 'CCANSAYA', 'HOLGUIN', 'FREDY EVERT', 'H', '90949615', NULL, NULL, '2018-09-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (38, '22022575500028', 'COAQUIRA', 'GUTIERREZ', 'BRAND EZIO', 'H', '90835578', NULL, NULL, '2018-06-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (39, '23145554200020', 'CONDORI', 'PUMA', 'REY DAVID', 'H', '91191726', NULL, NULL, '2019-02-15', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (40, '00000090956976', 'HERRERA', 'VENTURA', 'TAISSA CHRISTHELL', 'M', '90956976', NULL, NULL, '2018-08-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (41, '22022575500108', 'HUAMAN', 'AMANQUI', 'THIAGO DONATITO', 'H', '90928484', NULL, NULL, '2018-08-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (42, '23048661300100', 'JARA', 'ZAPATA', 'LEE JANG DAYIRO', 'H', '90742174', NULL, NULL, '2018-04-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (43, '00000090212355', 'MENDOZA', 'LAZARO', 'JOSHUÉ MANUEL', 'H', '90212355', NULL, NULL, '2017-05-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (44, '00000090874795', 'RIOS', 'VILCA', 'ANTONIO THIAGO', 'H', '90874795', NULL, NULL, '2018-07-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (45, '00000090984544', 'TICAHUANCA', 'MERLIN', 'MESLY AYDE', 'M', '90984544', NULL, NULL, '2018-10-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (46, '23133881300070', 'VENTURA', 'MACHACA', 'LIAM ULISES', 'H', '90799634', NULL, NULL, '2018-05-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (47, '23022575500230', 'YUCRA', 'HUALLPA', 'LIZBETH DIANA', 'M', '91026479', NULL, NULL, '2018-10-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (48, '00000090416988', 'BARRIENTOS', 'MACHACCA', 'BRIANA XIOMARA', 'M', '90416988', NULL, NULL, '2017-09-08', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (49, '00000090207203', 'CARLOS', 'QUISPE', 'SEBASTIAN SAUL', 'H', '90207203', NULL, NULL, '2017-04-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (50, '22022575500218', 'CHURA', 'BELIZARIO', 'ALLISON ARIANA', 'M', '90704175', NULL, NULL, '2018-03-31', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (51, '23152885000020', 'CONDORI', 'PACHECO', 'GAEL SANTOS', 'H', '90704915', NULL, NULL, '2018-03-31', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (52, '21022575500048', 'CORDOVA', 'ALARCON', 'JAZMIN ALEXSIA', 'M', '90697250', NULL, NULL, '2018-03-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (53, '00000090429059', 'DAVILA', 'HUMPIRI', 'SERGIO MATEO', 'H', '90429059', NULL, NULL, '2017-06-21', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (54, '21391403700608', 'GOMEZ', 'QUISPE', 'SANTIAGO ALONSO', 'H', '90453369', NULL, NULL, '2017-08-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (55, '19395687000048', 'GONZALES', 'APAZA', 'LUIS FERNANDO', 'H', '90478120', NULL, NULL, '2017-11-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (56, '00000090525485', 'MALLMA', 'MAZA', 'ANGELA ROMINA', 'M', '90525485', NULL, NULL, '2017-11-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (57, '00000090260838', 'MAMANI', 'ARAPA', 'ALEXIS DAVID', 'H', '90260838', NULL, NULL, '2017-06-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (58, '21170577100028', 'MAMANI', 'JARA', 'EDMIT MOISES', 'H', '90243932', NULL, NULL, '2017-05-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (59, '00000090584697', 'MAMANI', 'MACEDO', 'ERICK ENRIQUE', 'H', '90584697', NULL, NULL, '2018-01-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (60, '21169409000018', 'ORDOÑEZ', 'CALDERON', 'BRIDNY ANYELY', 'M', '90294284', NULL, NULL, '2017-07-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (61, '21115237000018', 'PIZANGO', 'GEMAN', 'LUCIA KATTANIA', 'M', '90241540', NULL, NULL, '2017-05-29', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (62, '21103159000258', 'QUISPE', 'BELIZARIO', 'DYLAN RODRIGO', 'H', '90649467', NULL, NULL, '2018-02-06', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (63, '00000090196369', 'ROJAS', 'LOPEZ', 'KENETH YHAMIR', 'H', '90196369', NULL, NULL, '2017-05-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (64, '00000090561391', 'VILCA', 'CONDORI', 'SANTIAGO PATRICIO', 'H', '90561391', NULL, NULL, '2017-12-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (65, '21022575500018', 'ALFERES', 'TOROCAHUA', 'MATEO RUBEN', 'H', '90418476', NULL, NULL, '2017-09-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (66, '00000090457889', 'BERNAL', 'ESPINOZA', 'ABIGAIL MILENA', 'M', '90457889', NULL, NULL, '2017-10-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (67, '20242017112509', 'BOLIVAR', 'DIAZ', 'VICTORIA ALEJANDRA', 'M', NULL, NULL, NULL, '2017-04-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (68, '00000090562326', 'CCACCASACA', 'FOLLANO', 'LUZ MASHIEL', 'M', '90562326', NULL, NULL, '2018-01-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (69, '00000090221665', 'CISNEROS', 'ARANDA', 'FERNANDA ELIZABETH', 'M', '90221665', NULL, NULL, '2017-05-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (70, '00000081386087', 'CRISPIN', 'SULLCARAY', 'JHOANNA LIZ', 'M', '81386087', NULL, NULL, '2017-09-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (71, '00000090487864', 'DELGADO', 'FLORES', 'LENA CRISTINE', 'M', '90487864', NULL, NULL, '2017-11-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (72, '00000090207555', 'HUAYLLAPUMA', 'BUSTINCIO', 'DOMINIC LIONEL', 'H', '90207555', NULL, NULL, '2017-05-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (73, '21022575500078', 'HUILLCA', 'VILCA', 'SALOMON ISAI', 'H', '90389917', NULL, NULL, '2017-08-16', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (74, '22170056600030', 'MAMANI', 'JILAJA', 'CRISTIAN LIONEL', 'H', '90479331', NULL, NULL, '2017-10-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (75, '23133859900250', 'MAMANI', 'PACCO', 'DYLAN BENJAMIN', 'H', '90391809', NULL, NULL, '2017-08-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (76, '22089306500068', 'MIRANDA', 'FERNANDEZ', 'ZULLY NOEMI', 'M', '92572417', NULL, NULL, '2017-08-15', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (77, '00000090544034', 'PACCO', 'LLAMOCA', 'THAIS SHARUMY', 'M', '90544034', NULL, NULL, '2017-12-15', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (78, '00000090213210', 'QUISPE', 'QUISPE', 'OLIVER LIAN', 'H', '90213210', NULL, NULL, '2017-05-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (79, '00000090298627', 'SEVILLANOS', 'RODRIGO', 'ZULEMA THAYSA', 'M', '90298627', NULL, NULL, '2017-07-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (80, '00000081386086', 'SULLCARAY', 'TAIPE', 'SHEYLA ROSMERI', 'M', '81386086', NULL, NULL, '2017-07-21', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (81, '00000079881852', 'ANCULLE', 'CAMARGO', 'MARIA FERNANDA', 'M', '79881852', NULL, NULL, '2016-09-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (82, '00000079996790', 'APAZA', 'HUACO', 'ALONDRA SAMIRA', 'M', '79996790', NULL, NULL, '2016-12-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (83, '00000079562178', 'CANALES', 'ORMACHEA', 'DANIELA SOFIA', 'M', '79562178', NULL, NULL, '2016-02-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (84, '00000079854920', 'CHAMBI', 'HUAMAN', 'EIMY MADELEYNE', 'M', '79854920', NULL, NULL, '2016-09-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (85, '21022575500208', 'CHIPA', 'HUAMANI', 'LUIS DANIEL', 'H', '79734408', NULL, NULL, '2016-06-18', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (86, '20022575500038', 'CONDORI', 'CARY', 'ARJEN NALDO', 'H', '79816357', NULL, NULL, '2016-08-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (87, '00000079850175', 'CONDORI', 'DIAZ', 'ELIZABETH RIHANA', 'M', '79850175', NULL, NULL, '2016-09-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (88, '20022575500058', 'CUTI', 'HUILLCA', 'THIAGO JEAN PIERRE', 'H', '79751714', NULL, NULL, '2016-06-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (89, '23076317700040', 'MARTINEZ', 'MEJIAS', 'SAMUEL JESUS', 'H', NULL, NULL, NULL, '2015-08-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (90, '00000081630580', 'MENDOZA', 'LAZARO', 'JOSHUA CALEB', 'H', '81630580', NULL, NULL, '2015-09-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (91, '00000079979480', 'PACCO', 'CCANCHILLO', 'ASHLY ANDREA', 'M', '79979480', NULL, NULL, '2016-12-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (92, '00000079836890', 'PEÑA', 'VALVERDE', 'ANAHI AMANDA', 'M', '79836890', NULL, NULL, '2016-09-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (93, '20022575500148', 'PONCE', 'BEDOYA', 'MARIA DEL PILAR ROSANGELA', 'M', '79745967', NULL, NULL, '2016-07-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (94, '00000079710259', 'QUISPE', 'VALENCIA', 'ADRIANA ABIGAIL', 'M', '79710259', NULL, NULL, '2016-06-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (95, '20157567900038', 'RODRIGUEZ', 'ANCO', 'KALEB YEREMY JUNIOR', 'H', '79973041', NULL, NULL, '2016-11-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (96, '00000079994340', 'SEDANO', 'REGINALDO', 'JINIA ZOLYMAR', 'M', '79994340', NULL, NULL, '2016-12-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (97, '00000090058648', 'SULLCA', 'HANCCO', 'CHRISTIAN SAUL', 'H', '90058648', NULL, NULL, '2017-02-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (98, '00000090128319', 'UGARTE', 'SUNE', 'MILETT LUANA', 'M', '90128319', NULL, NULL, '2017-03-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (99, '21137337200028', 'ACHULLI', 'RODRIGO', 'VALENTINA CRISTEL', 'M', '79705436', NULL, NULL, '2016-05-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (100, '00000079898105', 'ANCCORI', 'CCOLQUE', 'DAIRA SHANTALE', 'M', '79898105', NULL, NULL, '2016-10-12', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (101, '23021929500110', 'CARDOZO', 'BOLIVAR', 'ASHLEY VALENTINA', 'M', NULL, NULL, NULL, '2016-07-08', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (102, '00000079864145', 'CHOQUEHUANCA', 'SUMIRE', 'JHOSEP ALEXANDER', 'H', '79864145', NULL, NULL, '2016-09-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (103, '00000090981845', 'CHUMBES', 'SERRANO', 'YAIR JUNIOR', 'H', '90981845', NULL, NULL, '2017-03-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (104, '21072301500078', 'CONTRERAS', 'SANTILLANA', 'BRIANNA VALERIA', 'M', '90069728', NULL, NULL, '2017-02-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (105, '00000079647699', 'FAIJO', 'OVANDO', 'ADELIZ', 'M', '79647699', NULL, NULL, '2016-04-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (106, '00000079884929', 'GÜERE', 'HUARCA', 'BERNHARD NEYTAN', 'H', '79884929', NULL, NULL, '2016-10-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (107, '20244460800078', 'HUALLPA', 'MALLMA', 'THIAGO MATHIAS', 'H', '79878370', NULL, NULL, '2016-09-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (108, '21089411300018', 'HUANACUNI', 'HUAMAN', 'ARIANA ASENET', 'M', '90058572', NULL, NULL, '2017-01-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (109, '00000090059387', 'MACHACA', 'MAMANI', 'HABBIE LUANA', 'M', '90059387', NULL, NULL, '2017-01-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (110, '20022575500108', 'MAMANI', 'AGUIRRE', 'JHON PATRICIO', 'H', '90032168', NULL, NULL, '2017-01-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (111, '00000090002899', 'MIRANDA', 'RODRIGUEZ', 'IAN ADRIEL KEFREN', 'H', '90002899', NULL, NULL, '2016-12-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (112, '23055635700050', 'PACHECO', 'RANGEL', 'JORGE', 'H', '002510532', NULL, NULL, '2016-04-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (113, '00000079648436', 'PANDIA', 'PARICAHUA', 'BRYSSNEY MERLYN', 'M', '79648436', NULL, NULL, '2016-04-29', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (114, '00000090001791', 'PROVINCIA', 'CHUQUIMAMANI', 'ESTEBAN GAEL', 'H', '90001791', NULL, NULL, '2016-12-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (115, '00000090050322', 'QUISPE', 'HOLGUIN', 'DIEGO JAEL', 'H', '90050322', NULL, NULL, '2017-01-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (116, '22157461500018', 'SEGOVIA', 'ARIAS', 'KEILLER JHOAN', 'H', NULL, NULL, NULL, '2016-08-15', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (117, '21177297900038', 'YUJRA', 'INCACUTIPA', 'LUIS ANTHONY', 'H', '79783432', NULL, NULL, '2016-08-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (118, '00000079977015', 'ZAMATA', 'LAGOS', 'ESTEFANY YAMILETT', 'M', '79977015', NULL, NULL, '2016-11-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (119, '00000079487332', 'ARCE', 'QUISPE', 'MIGUEL ANGEL MATEO', 'H', '79487332', NULL, NULL, '2016-01-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (120, '00000079252941', 'BALBIN', 'AGÜERO', 'ALIZZ STHEFANI', 'M', '79252941', NULL, NULL, '2015-08-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (121, '00000079677980', 'CHAVEZ', 'CONDORI', 'CARLOS NARCISO', 'H', '79677980', NULL, NULL, '2015-08-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (122, '00000079436436', 'CONDORI', 'PUMA', 'NEYMAR WILLIAN', 'H', '79436436', NULL, NULL, '2015-12-06', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (123, '19022575500048', 'CORDOVA', 'ALARCON', 'DALESKA FERNANDA', 'M', '79192119', NULL, NULL, '2015-06-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (124, '00000090223138', 'CORNEJO', 'HUILLCA', 'SILA DAYANA', 'M', '90223138', NULL, NULL, '2015-09-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (125, '25021929500040', 'DIAZ', 'VIERA', 'LUIS MANUEL', 'H', NULL, NULL, NULL, '2016-01-12', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (126, '19022575500078', 'FIGUEROA', 'GOMEZ', 'ALEJANDRO SEBASTIAN', 'H', '81629452', NULL, NULL, '2015-05-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (127, '00000079417320', 'FRISANCHO', 'MEDINA', 'PABLO ESTEFANO', 'H', '79417320', NULL, NULL, '2015-11-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (128, '00000079426747', 'HEREDIA', 'MONTESINOS', 'EDUARDO PAOLO', 'H', '79426747', NULL, NULL, '2015-10-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (129, '00000079141369', 'HUAMAN', 'SILUPU', 'JOAQUIN ALADINO', 'H', '79141369', NULL, NULL, '2015-05-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (130, '00000081629231', 'HUAYHUA', 'CCORAHUA', 'LIONO ANDRIW SANTIAGO', 'H', '81629231', NULL, NULL, '2015-05-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (131, '18164204000058', 'MENDOZA', 'SERRANO', 'EDDY GABRIEL', 'H', '81648405', NULL, NULL, '2014-08-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (132, '00000079579451', 'MIRANDA', 'CONDORI', 'KARELY ROSABEL', 'M', '79579451', NULL, NULL, '2016-03-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (133, '19022575500148', 'PARI', 'CONDORI', 'JEREMY ALDAIR', 'H', '79336795', NULL, NULL, '2015-10-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (134, '00000079198111', 'PAZ', 'PERALTA', 'GINEBRA BRIHANNA', 'M', '79198111', NULL, NULL, '2015-06-25', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (135, '19022575500168', 'PONCE', 'BEDOYA', 'BRIELLA PIERINA', 'M', '79085525', NULL, NULL, '2015-04-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (136, '19022575500158', 'PORTUGAL', 'OVIEDO', 'ADRIANO FACUNDO', 'H', '79167128', NULL, NULL, '2015-06-16', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (137, '19022575500178', 'POVIS', 'PACCO', 'LISHA ISABEL', 'M', '79275315', NULL, NULL, '2015-08-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (138, '19089242200078', 'QUISPE', 'BELIZARIO', 'MAYTE ADRIANA', 'M', '79550987', NULL, NULL, '2016-02-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (139, '00000079205443', 'QUISPE', 'CCALLO', 'ALIZ ANYELA', 'M', '79205443', NULL, NULL, '2015-06-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (140, '00000079219530', 'TULA', 'SONCCO', 'ANDREA YHOSELYN', 'M', '79219530', NULL, NULL, '2015-07-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (141, '19022575500218', 'VERA', 'HANCCO', 'MERCEDES KATHERINE', 'M', '79553072', NULL, NULL, '2016-03-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (142, '00000079489610', 'YUPA', 'QUISPE', 'ANTHONY FRANCISCO ALEXANDER', 'H', '79489610', NULL, NULL, '2016-01-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (143, '19126348200018', 'ALARCON', 'MATUTE', 'GABRIEL ANDRE', 'H', '79094828', NULL, NULL, '2015-04-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (144, '00000081629051', 'ARAPA', 'LLAVE', 'EVELYN KATALEYA', 'M', '81629051', NULL, NULL, '2015-05-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (145, '19161561600018', 'CABANA', 'PUMA', 'SILVANA ANDREA', 'M', '79533533', NULL, NULL, '2016-02-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (146, '00000081376057', 'CHIPANA', 'QUISPE', 'XHAVI ELISON', 'H', '81376057', NULL, NULL, '2016-02-18', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (147, '00000079505173', 'CONDORI', 'BEJARANO', 'ADRIANO ANGEL', 'H', '79505173', NULL, NULL, '2016-02-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (148, '00000079458372', 'GROVAS', 'PACCO', 'ABIGAIL MELANY', 'M', '79458372', NULL, NULL, '2016-01-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (149, '19148851900028', 'HANCCO', 'APAZA', 'ANDREE ORLANDO', 'H', '79087574', NULL, NULL, '2015-04-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (150, '18144470300068', 'HUANACUNI', 'HUAMAN', 'LIAN BENJAMIN', 'H', '79141962', NULL, NULL, '2015-05-29', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (151, '00000079570234', 'LOPE', 'QUISPE', 'STELLA RISU', 'M', '79570234', NULL, NULL, '2016-03-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (152, '21327381600068', 'MORALES', 'AVILES', 'GINO JHOSMANI', 'H', '79131814', NULL, NULL, '2015-05-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (153, '19126348200098', 'MOTTOCCANCHI', 'AYAMAMANI', 'AXEL GAEL', 'H', '79099592', NULL, NULL, '2015-05-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (154, '00000081523912', 'NAHUE', 'YALLERCCO', 'BRUNELLA ARLETH', 'M', '81523912', NULL, NULL, '2016-02-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (155, '00000079312956', 'OJEDA', 'SALAS', 'NIKOLAS EZEL', 'H', '79312956', NULL, NULL, '2015-09-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (156, '00000079599655', 'PACCO', 'LLAMOCA', 'FABIAN GADIEL', 'H', '79599655', NULL, NULL, '2016-03-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (157, '00000079270295', 'PACHECO', 'SANCHEZ', 'BRYANA MERLYA', 'M', '79270295', NULL, NULL, '2015-08-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (158, '00000079392791', 'PERALTA', 'MAMANI', 'KIARA MILAGROS', 'M', '79392791', NULL, NULL, '2015-11-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (159, '21156281800218', 'ROQUE', 'TOROCAHUA', 'MARIANNE FRANCHESCA', 'M', '79243694', NULL, NULL, '2015-08-12', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (160, '00000079565066', 'ROSAS', 'AGUILAR', 'YOSELIN CAMILA', 'M', '79565066', NULL, NULL, '2016-03-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (161, '20022575500208', 'SALAS', 'BARRIOS', 'CATHALEYA VALENTINA', 'M', '79537794', NULL, NULL, '2016-02-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (162, '00000080790662', 'SEDANO', 'QUISPE', 'YOLANDA', 'M', '80790662', NULL, NULL, '2015-08-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (163, '00000079440332', 'SONCCO', 'COLQUE', 'TRISTAN MILAN', 'H', '79440332', NULL, NULL, '2015-12-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (164, '18208680300018', 'SOTO', 'LUICHO', 'THIAGO ANDREII', 'H', '79130726', NULL, NULL, '2015-05-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (165, '00000081292026', 'SULLCARAY', 'TAIPE', 'DIANA', 'M', '81292026', NULL, NULL, '2015-05-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (166, '00000081639357', 'TITO', 'ALMONTE', 'INGRID ARACELY', 'M', '81639357', NULL, NULL, '2015-06-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (167, '19022575500228', 'ZAPANA', 'RIVERA', 'XIOMARA RAFAELA', 'M', '79725584', NULL, NULL, '2016-03-29', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (168, '18132154600188', 'ALEJOS', 'COSAR', 'LIAM SAYCAR', 'H', '78763866', NULL, NULL, '2014-08-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (169, '22021929500010', 'BARRIOS', 'MENDEZ', 'MATHEO IGNACIO', 'H', '115948927', NULL, NULL, '2014-11-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (170, '00000081592131', 'BETANCUR', 'BERROCAL', 'ERICK JOHAO', 'H', '81592131', NULL, NULL, '2014-06-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (171, '00000081594627', 'CABANA', 'PUMA', 'ANGEL ARMANDO', 'H', '81594627', NULL, NULL, '2014-09-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (172, '00000081592940', 'CHIPANE', 'PORTILLO', 'ANTHONY JEIKO', 'H', '81592940', NULL, NULL, '2014-07-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (173, '00000081224009', 'CHUIMA', 'HUAMAN', 'MARIA ALEJANDRA', 'M', '81224009', NULL, NULL, '2014-09-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (174, '00000081194877', 'HACHA', 'CONDORI', 'JONATHAN MATÍAZ', 'H', '81194877', NULL, NULL, '2013-09-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (175, '00000081607687', 'HUANCA', 'CCAMA', 'NORICK SEBASTIAN', 'H', '81607687', NULL, NULL, '2014-12-06', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (176, '00000078739807', 'MAMANI', 'MAMANI', 'MICHELLE SHARMELY', 'M', '78739807', NULL, NULL, '2014-07-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (177, '18022575500108', 'MASCO', 'CEREZO', 'YAMILA FERNANDA', 'M', '78733856', NULL, NULL, '2014-08-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (178, '18022575500138', 'PACCO', 'MENDOZA', 'HAFID ERICK', 'H', '79005661', NULL, NULL, '2015-03-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (179, '19022508600038', 'PACHA', 'MEDINA', 'LUCIANA GUADALUPE', 'M', '81592868', NULL, NULL, '2014-07-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (180, '00000079024345', 'PACO', 'ZUÑIGA', 'DANILO JOSÉ', 'H', '79024345', NULL, NULL, '2015-03-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (181, '18126236900048', 'PEÑA', 'VALVERDE', 'LEYDI YANIRA', 'M', '78916158', NULL, NULL, '2014-12-18', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (182, '00000078747362', 'ROQUE', 'CCORAHUA', 'BRITHANI VALERIA', 'M', '78747362', NULL, NULL, '2014-08-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (183, '00000081630667', 'TARIFA', 'SURCO', 'FLOR KARELY', 'M', '81630667', NULL, NULL, '2014-09-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (184, '18111996500228', 'TORRES', 'CADENAS', 'ORIANA SOFHIA', 'M', NULL, NULL, NULL, '2014-04-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (185, '17022575500158', 'VALDIVIA', 'CHUQUITAYPE', 'DAYRON HENRRY', 'H', '78211225', NULL, NULL, '2013-07-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (186, '18022575500208', 'YUPANQUI', 'MAMANI', 'JUDITH KATIA', 'M', '79030875', NULL, NULL, '2015-03-21', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (187, '00000081603582', 'APFATA', 'BUSTINCIO', 'ROY BENJAMIN', 'H', '81603582', NULL, NULL, '2014-12-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (188, '00000078710269', 'BORJA', 'VARGAS', 'GIOVANNI ELAR', 'H', '78710269', NULL, NULL, '2014-08-08', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (189, '00000081594820', 'CHAMPI', 'CUTIRE', 'JHORDAN ALDAIR', 'H', '81594820', NULL, NULL, '2014-10-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (190, '18136435500118', 'ESPINOZA', 'BETANCUR', 'MAX JOSUÉ', 'H', '78985024', NULL, NULL, '2015-02-15', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (191, '00000078774815', 'HERRERA', 'VENTURA', 'VALENTINA JAZMIN', 'M', '78774815', NULL, NULL, '2014-08-15', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (192, '00000079137760', 'HUARMIYURI', 'SILVA', 'ALEXIS ADRIANO', 'H', '79137760', NULL, NULL, '2015-01-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (193, '20022575500218', 'LAURA', 'ADRIAN', 'PRISCILA', 'M', '81550127', NULL, NULL, '2014-06-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (194, '00000078862650', 'LOPEZ', 'MAMANI', 'ANGEL URIEL', 'H', '78862650', NULL, NULL, '2013-08-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (195, '19175298900098', 'MAMANI', 'CCANSAYA', 'GARET NEYMAR', 'H', '78601988', NULL, NULL, '2014-05-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (196, '00000081594240', 'MAYTA', 'MACHACCA', 'SOELENG GEORGHET', 'M', '81594240', NULL, NULL, '2014-07-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (197, '24021929500010', 'SALAS', 'VARGAS', 'ANGEL JESUS', 'H', NULL, NULL, NULL, '2013-03-15', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (198, '20157461500028', 'SEGOVIA', 'ARIAS', 'KEIVER RENE', 'H', NULL, NULL, NULL, '2014-07-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (199, '00000078586368', 'SOLORZANO', 'SAMATA', 'LEYDI YOELINA', 'M', '78586368', NULL, NULL, '2014-04-29', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (200, '00000081594436', 'TINOCO', 'CALCINA', 'MIGUEL ALBERTO', 'H', '81594436', NULL, NULL, '2014-06-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (201, '00000079063886', 'UTURUNCO', 'INQUILLAY', 'ROGER', 'H', '79063886', NULL, NULL, '2014-04-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (202, '00000078731961', 'VALENCIA', 'MALLMA', 'LIAM RAFAEL', 'H', '78731961', NULL, NULL, '2014-08-25', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+ON CONFLICT (dni) WHERE dni IS NOT NULL DO NOTHING;
 
--- ------------------------------------------------------------
--- 2. MATRÍCULAS 2026
--- ------------------------------------------------------------
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91263829'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91410015'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91538470'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91748426'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91476018'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91692770'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='92947110'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91305222'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91571364'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91458350'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91353360'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91309723'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91717567'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91744485'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91806486'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91693404'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91532743'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91342870'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91513516'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91571665'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91292504'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91326990'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91712232'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91493128'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91315097'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91624993'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91347607'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91657607'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91666694'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91641038'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91373231'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91686664'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91774681'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91757364'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='80790672'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91434130'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91189284'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90829887'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91042025'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91099470'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90971291'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91114071'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91245826'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90243966'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91564605'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91248050'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90714928'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90656744'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='80790667'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90887365'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90884751'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90949615'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90835578'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91191726'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90956976'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90928484'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90742174'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90212355'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90874795'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90984544'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90799634'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='91026479'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90416988'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90207203'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90704175'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90704915'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90697250'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90429059'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90453369'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90478120'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90525485'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90260838'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90243932'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90584697'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90294284'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90241540'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90649467'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90196369'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90561391'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90418476'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90457889'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90562326'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90221665'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81386087'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90487864'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90207555'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90389917'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90479331'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90391809'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='92572417'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90544034'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90213210'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90298627'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81386086'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79881852'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79996790'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79562178'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79854920'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79734408'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79816357'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79850175'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79751714'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81630580'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79979480'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79836890'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79745967'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79710259'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79973041'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79994340'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90058648'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90128319'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79705436'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79898105'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79864145'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90981845'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90069728'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79647699'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79884929'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79878370'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90058572'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90059387'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90032168'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90002899'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='002510532'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79648436'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90001791'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90050322'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79783432'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79977015'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79487332'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79252941'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79677980'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79436436'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79192119'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90223138'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81629452'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79417320'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79426747'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79141369'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81629231'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81648405'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79579451'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79336795'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79198111'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79085525'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79167128'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79275315'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79550987'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79205443'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79219530'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79553072'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79489610'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79094828'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81629051'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79533533'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81376057'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79505173'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79458372'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79087574'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79141962'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79570234'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79131814'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79099592'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81523912'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79312956'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79599655'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79270295'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79392791'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79243694'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79565066'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79537794'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='80790662'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79440332'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79130726'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81292026'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81639357'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79725584'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78763866'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='115948927'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81592131'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81594627'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81592940'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81224009'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81194877'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81607687'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78739807'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78733856'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79005661'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81592868'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79024345'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78916158'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78747362'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81630667'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78211225'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79030875'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81603582'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78710269'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81594820'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78985024'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78774815'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79137760'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81550127'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78862650'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78601988'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81594240'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78586368'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81594436'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79063886'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-10'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78731961'
-  AND n.nombre='Primaria' AND g.nivel_id=n.id AND g.nombre='6to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-
--- Verificar
-SELECT
-  e.apellido_paterno || ' ' || e.apellido_materno AS apellidos,
-  e.nombres, n.nombre AS nivel, g.nombre AS grado, s.nombre AS seccion, a.anio
-FROM matriculas m
-JOIN estudiantes e ON e.id=m.estudiante_id
-JOIN grados g ON g.id=m.grado_id
-JOIN niveles n ON n.id=g.nivel_id
-JOIN secciones s ON s.id=m.seccion_id
-JOIN anios_escolares a ON a.id=m.anio_id
-ORDER BY g.nombre, s.nombre, e.apellido_paterno;
-
-
-
-
---====================================================================================
--- secundaria
--- ==============================================================
--- SECUNDARIA 2026 — Neon / PostgreSQL
--- 243 estudiantes + matrículas
--- ==============================================================
-
--- ------------------------------------------------------------
--- 1. ESTUDIANTES
--- ------------------------------------------------------------
-INSERT INTO estudiantes (apellido_paterno, apellido_materno, nombres, dni, fecha_nacimiento, egresado)
+-- ── SECUNDARIA ────────────────────────────────────────────────
+INSERT INTO estudiantes
+  (id, codigo_estudiante, apellido_paterno, apellido_materno, nombres, sexo, dni,
+   celular, email, fecha_nacimiento, departamento_nacimiento, provincia_nacimiento,
+   distrito_nacimiento, domicilio, reporte, egresado,
+   padre_dni, padre_nombres, padre_apellidos, padre_celular,
+   madre_dni, madre_nombres, madre_apellidos, madre_celular)
 VALUES
-  ('ALANIA', 'VICHATA', 'DAYIRO ALEXIS', '63153927', '2013-07-21', FALSE),
-  ('AVILA', 'USKA', 'ARIANA GUADALUPE', '81228111', '2013-08-19', FALSE),
-  ('BORDA', 'CALSINA', 'RAFAEL YASMANI', '78478089', '2014-03-04', FALSE),
-  ('CALCINA', 'NOA', 'KIARA MAYTE', '78081538', '2013-04-11', FALSE),
-  ('CHAVEZ', 'MAMANI', 'ABAD ALAIN', '78292861', '2013-08-20', FALSE),
-  ('CHILE', 'QUISPE', 'WILLY RODRIGO', '78352131', '2013-12-03', FALSE),
-  ('CHOQUEMAQUE', 'COLQUE', 'EBANDRO YONATHAN', '78329575', '2013-10-25', FALSE),
-  ('CHUMBES', 'DEVERA', 'ANDY JOSHUA', '63073431', '2013-06-22', FALSE),
-  ('CONDORI', 'DIAZ', 'THIAGO MYLAN', '81196156', '2013-10-03', FALSE),
-  ('GÜERE', 'HUARCA', 'ANGELO EMANUEL', '78435507', '2014-01-29', FALSE),
-  ('HUAMAN', 'AGUIRRE', 'JORGE ERASMO', '81228357', '2013-07-26', FALSE),
-  ('HUAMAN', 'MENDEZ', 'ROYER YENKO', '78211766', '2013-06-19', FALSE),
-  ('HUAYCANI', 'CALISAYA', 'GUSTAVO ALEJANDRO', '78511532', '2014-03-24', FALSE),
-  ('ILASACA', 'PAMPA', 'MILAGROS ESPERANZA', '78305980', '2013-06-02', FALSE),
-  ('MUÑA', 'TOROCAHUA', 'DILAND ANDREE', '81118551', '2013-04-26', FALSE),
-  ('OVIEDO', 'CASAZOLA', 'FABIANA DAYNÉ', '81197024', '2013-10-11', FALSE),
-  ('PANDIA', 'QUISPE', 'AMY', '78440075', '2014-01-16', FALSE),
-  ('PIZARRO', 'VILCAPAZA', 'ADRIANO JOAQUIN', '78263838', '2013-09-10', FALSE),
-  ('SALHUA', 'CCOROPUNA', 'DIEGO SEBASTIAN', '78235058', '2013-07-07', FALSE),
-  ('SEDANO', 'QUISPE', 'WILIAN', '78392718', '2013-12-22', FALSE),
-  ('SONCCO', 'CALCINA', 'FLOR MARILY', '78153451', '2013-05-27', FALSE),
-  ('TAIPE', 'DIAZ', 'ALANIS DASHA', '81228148', '2013-09-01', FALSE),
-  ('TORRES', 'LUQUE', 'FIORELA YESENIA', '78420925', '2014-01-22', FALSE),
-  ('TULA', 'MAMANI', 'FRANCO AARON', '81539952', '2014-01-27', FALSE),
-  ('VERA', 'HANCCO', 'NAYELI MISHELL', '81539445', '2014-01-22', FALSE),
-  ('YANA', 'RODRIGUEZ', 'MARIA BELEN', '78646536', '2014-02-25', FALSE),
-  ('ALEJO', 'GAMARRA', 'RUTH AYUMI', '78132929', '2013-05-18', FALSE),
-  ('AMANCA', 'TTITO', 'EDUARDO EFRAIN', '81560158', '2013-05-25', FALSE),
-  ('BUENDIA', 'MENDOZA', 'LUCAS JANO', '78218966', '2013-08-10', FALSE),
-  ('CCALLO', 'CHINCHERCOMA', 'JOEL VICTOR', '81169449', '2013-08-17', FALSE),
-  ('CHACO', 'BARANDIARAN', 'YHERIK AUGUSTO YSBAIL', '78722246', '2013-02-28', FALSE),
-  ('CHIPANA', 'QUISPE', 'AARON CRHISTIAN ABIERY', '80931057', '2014-01-26', FALSE),
-  ('CHOQUECABANA', 'CALLOHUANCA', 'MILLET IVANA', '78268274', '2013-09-03', FALSE),
-  ('CHUMBES', 'SERRANO', 'JACK NEYMAR', '79208199', '2013-04-14', FALSE),
-  ('COPARA', 'HUAYNA', 'NEVENKA JAKELINE', '78051687', '2013-04-04', FALSE),
-  ('DIAZ', 'TICONA', 'LUHANA KEYLA', '81114430', '2013-05-05', FALSE),
-  ('HUACHO', 'AGUILAR', 'KELY MARINA', '78838410', '2014-01-21', FALSE),
-  ('JAEN', 'CUTIPA', 'CARLOS DANIEL', '81539484', '2014-01-23', FALSE),
-  ('LEON', 'BEDOYA', 'KENYA KELEEN', '78096942', '2013-04-02', FALSE),
-  ('LUQUE', 'PALOMINO', 'HANSEL ISMAEL', '81190234', '2013-12-17', FALSE),
-  ('MARURE', 'MAMANI', 'ASHLY JAHAIRA', '78492780', '2014-03-06', FALSE),
-  ('MENDEZ', 'RIVAS', 'JEANPIERE MAYCOL', '81558691', '2014-02-28', FALSE),
-  ('PACCO', 'CALCINA', 'NEYMAR RODRIGO', '78221020', '2013-07-27', FALSE),
-  ('PANCCA', 'QUISPE', 'ORLANDO JESUS', '81558783', '2014-03-02', FALSE),
-  ('PORTUGAL', 'OVIEDO', 'ARANTZA KEISHLA', '81194454', '2013-09-21', FALSE),
-  ('QUISPE', 'PALACIOS', 'MIRIAM FERNANDA', '78133506', '2013-05-24', FALSE),
-  ('RAMOS', 'CUTIRE', 'DIEGO ARNULFO', '81540347', '2014-02-23', FALSE),
-  ('ROJO', 'QUISPE', 'BRITTANY NIKOLE', '90187002', '2013-07-04', FALSE),
-  ('SALAS', 'BARRIOS', 'BENJAMIN EMANUEL', '81539239', '2014-01-14', FALSE),
-  ('SANDI', 'BALTA', 'LUCIANA ANABEL', '78161153', '2013-06-17', FALSE),
-  ('SEVILLANOS', 'RODRIGO', 'ADRIANO JOEL', '81558831', '2014-03-05', FALSE),
-  ('TIPULA', 'DIAZ', 'EMANUEL JORGE', '78176027', '2013-07-12', FALSE),
-  ('VELASQUEZ', 'TULA', 'FREDY ANGEL', '81444212', '2013-11-04', FALSE),
-  ('VILLAFUERTE', 'POVEA', 'LIAM NEYMAR', '90276763', '2014-02-01', FALSE),
-  ('ASCENCIOS', 'CCAHUA', 'DANIEL ELIAS', '81195564', '2012-10-04', FALSE),
-  ('ASCENCIOS', 'GARCIA', 'LUIS CARLOS', '81377787', '2012-06-10', FALSE),
-  ('BERNAL', 'ESPINOZA', 'MELANI JULIETA', '62146335', '2012-09-22', FALSE),
-  ('CARCAUSTO', 'YARICE', 'NHILA ABIGAIL', '63244994', '2012-05-04', FALSE),
-  ('CCOSCCO', 'CEREZO', 'ANGIE YUDELY', '63533332', '2012-10-19', FALSE),
-  ('CHAISA', 'VILCA', 'YANDY ALICIA', '81052155', '2012-11-11', FALSE),
-  ('CHIPANE', 'PORTILLO', 'ANA GRAYLIN', '62819420', '2011-04-17', FALSE),
-  ('CORNEJO', 'HUILLCA', 'JUAN GABRIEL', '63535664', '2012-06-13', FALSE),
-  ('FLORES', 'MAMANI', 'SULLY NAOMI', '81113858', '2013-03-27', FALSE),
-  ('GARCIA', 'ILLACUTIPA', 'ARIANA ZAHORY', '77875829', '2012-11-13', FALSE),
-  ('GOMEZ', 'QUISPE', 'FABRIZIO JEDAM', '81112330', '2013-02-09', FALSE),
-  ('HUAMANI', 'CHURATA', 'ALEXANDRO YEFERSSON', '62958658', '2011-10-03', FALSE),
-  ('NAHUE', 'LEON', 'PAMELA MASIEL', '81093756', '2012-12-14', FALSE),
-  ('PARI', 'CONDORI', 'THAYZ KEYRA', '63735811', '2013-01-02', FALSE),
-  ('PUMA', 'YUPANQUI', 'CINTIA ANABEL', '81078343', '2012-10-20', FALSE),
-  ('PUSACLLA', 'VELA', 'MICAELA', '63429546', '2012-11-20', FALSE),
-  ('RUIZ', 'ZEVALLOS', 'ERICK GHAEL', '63735801', '2012-12-07', FALSE),
-  ('SALAS', 'MEDINA', 'GABRIEL MATEO', '77862645', '2012-06-25', FALSE),
-  ('SANCHEZ', 'BELTRAN', 'BRITNEY MELANY', '63727904', '2012-04-11', FALSE),
-  ('SANCHEZ', 'BELTRAN', 'DANY JHOSHIMAR', '63727905', '2012-04-11', FALSE),
-  ('SARMIENTO', 'SARMIENTO', 'DANIEL STHIPF', '81132770', '2013-01-05', FALSE),
-  ('SONCCO', 'APAZA', 'YEAN CARLOS HUBER', '78032709', '2013-02-23', FALSE),
-  ('BELIZARIO', 'CCALLO', 'KELLY MASHIEL', '77653181', '2012-05-18', FALSE),
-  ('BOZA', 'PORTILLA', 'DAYIRO BENJAMIN', '81063789', '2012-10-31', FALSE),
-  ('CALLA', 'HUANCA', 'SERGIO ADOLFO', '81047810', '2012-07-13', FALSE),
-  ('CCORAHUA', 'DIAZ', 'LUIS GABRIEL', '80857111', '2012-08-24', FALSE),
-  ('CCORPUNA', 'TURPO', 'TANIA NICOL', '80868132', '2013-03-23', FALSE),
-  ('CCOTO', 'CAYANI', 'MATHIAS JULIAN', '80985895', '2012-10-29', FALSE),
-  ('CENTENO', 'IQUIAPAZA', 'ZULLY BELLA DULZE', '77824702', '2012-09-12', FALSE),
-  ('JAYO', 'HUAHUACONDORI', 'LUIS FERNANDO', '77724737', '2012-06-18', FALSE),
-  ('KAIRA', 'HUAYTA', 'LUIS FERNANDO', '81093190', '2012-08-13', FALSE),
-  ('LOPEZ', 'ZUÑIGA', 'ENDERSON ALEXANDER', '77886247', '2012-10-29', FALSE),
-  ('MAMANI', 'JARA', 'ARTUR JHENRRY', '77879158', '2012-11-13', FALSE),
-  ('MEDINA', 'DIAZ', 'ANGELA GABRIELA', '81093307', '2012-11-30', FALSE),
-  ('MELO', 'CHILO', 'LEONEL YORDY', '81156174', '2013-02-10', FALSE),
-  ('OVIEDO', 'CASAZOLA', 'TATIANA ANDREA', '77728816', '2012-05-22', FALSE),
-  ('PACHA', 'GONZALES', 'ADRIANO ALBERT YOSIMAR', '63232353', '2012-05-10', FALSE),
-  ('PAPEL', 'HOLGUIN', 'ABRYL JAMYLET', '63244987', '2012-05-13', FALSE),
-  ('PASTOR', 'MATUTE', 'JHARETH ANTONELA', '63762206', '2012-07-24', FALSE),
-  ('QUISPE', 'HUAMANI', 'YEISON HEYNER', '63423127', '2012-08-08', FALSE),
-  ('RIOS', 'VILCA', 'ADRIANA BELEN ESTRELLA', '81094308', '2013-01-06', FALSE),
-  ('TAMO', 'COAGUILA', 'LUIS FERNANDO', '77759868', '2012-07-26', FALSE),
-  ('TRUJILLO', 'CORREA', 'THIAGO LINCOL', '62832079', '2013-01-19', FALSE),
-  ('URBINA', 'MAMANI', 'ESTER ANTONELA', '77980612', '2013-01-28', FALSE),
-  ('ZAPANA', 'RIVERA', 'DAYIRO JOSUE', '81094442', '2012-11-16', FALSE),
-  ('AYALA', 'MEZA', 'BELTSASAR', '62222818', '2010-10-05', FALSE),
-  ('CCACCASACA', 'FOLLANO', 'RUTH KAREN', '63114715', '2012-03-16', FALSE),
-  ('CHAMBI', 'CALDERON', 'LEYDY MILAGROS', '62939917', '2011-12-01', FALSE),
-  ('CHIPA', 'HUAMANI', 'PAOLA ALEXANDRA', '63093662', '2012-02-17', FALSE),
-  ('CHUMBES', 'SERRANO', 'FELIPE ARMANDO', '63084913', '2011-11-26', FALSE),
-  ('COA', 'CAMPERO', 'RICGIAN DANIEL', '34292571', '2011-01-30', FALSE),
-  ('DIAZ', 'PACCI', 'BRAYAN ALONSO', '63084451', '2011-12-08', FALSE),
-  ('FERNANDEZ', 'HANCCO', 'MIGUEL ANGEL', '62701495', '2010-10-18', FALSE),
-  ('FLORES', 'MAMANI', 'LUANA KONY NANCY', '62818924', '2011-04-04', FALSE),
-  ('GARATE', 'YLLANES', 'CARLOS FRANCISCO', '62960498', '2011-10-11', FALSE),
-  ('HUIRMA', 'VALENCIA', 'JHON RONALDO', '62819999', '2011-04-24', FALSE),
-  ('LAURA', 'QUISPE', 'JOSELITO SEBASTIAN', '62888790', '2011-09-03', FALSE),
-  ('LOPEZ', 'ZUÑIGA', 'JENNIFER BRIGITH DE LOS ANGELES', '77109365', '2011-05-23', FALSE),
-  ('MAMANI', 'JILAJA', 'FIORELLA MILAGROS', '62831191', '2011-07-11', FALSE),
-  ('MAMANI', 'ZAMATA', 'LIZBETH MARYORI', '63693766', '2012-02-26', FALSE),
-  ('MASCO', 'CEREZO', 'KAREN MILAGROS', '62702152', '2010-12-09', FALSE),
-  ('PACHECO', 'RAMOS', 'BETSY YAMILA', '62886488', '2011-06-28', FALSE),
-  ('PALLI', 'ENRIQUEZ', 'JAMES OXFORD', '62858901', '2011-07-03', FALSE),
-  ('PUMA', 'CONDORI', 'PATRIK DASHYRO', '62254243', '2011-06-02', FALSE),
-  ('QUISPE', 'REAÑO', 'ANGELO HAIR', '62888332', '2011-08-08', FALSE),
-  ('QUISPE', 'URURI', 'ALVARO JHAIR', '63174354', '2012-01-03', FALSE),
-  ('RAMOS', 'CUTIRE', 'NAYELI', '62259227', '2011-08-13', FALSE),
-  ('RIVAS', 'BENITES', 'LUCERO', '63293139', '2011-07-11', FALSE),
-  ('SUAREZ', 'MANGO', 'RICARDO GEANFRANCO', '62958754', '2011-08-27', FALSE),
-  ('TALAVERA', 'ZEVALLOS', 'ANDRE YAREL', '63093666', '2012-03-06', FALSE),
-  ('TORRES', 'AGUIRRE', 'LUIS JAVIER', '62810398', '2011-04-24', FALSE),
-  ('UTURUNCO', 'INQUILLAY', 'ROSYLINDA', '63047429', '2012-01-10', FALSE),
-  ('VILCA', 'PACHA', 'MATEO ALEXANDER', '63083855', '2011-12-05', FALSE),
-  ('VILLEGAS', 'CHAVEZ', 'HUGO DANIEL ALEJANDRO', '77598280', '2012-03-18', FALSE),
-  ('YUJRA', 'INCACUTIPA', 'LIZ KATHERIN', '62231011', '2011-04-01', FALSE),
-  ('ALANIA', 'VICHATA', 'KATERIN SARA', '62083883', '2011-04-04', FALSE),
-  ('ANCCO', 'CAHUANA', 'BRENDA IVET', '63230264', '2012-02-19', FALSE),
-  ('ARAPA', 'TUPAC', 'ALDANA KARELI', '63084478', '2011-12-21', FALSE),
-  ('ARREDONDO', 'BORDA', 'DAYANA MARIBEL', '63084979', '2012-01-01', FALSE),
-  ('BOLIVAR', 'MARIN', 'VICTOR EDUARDO', 'V33870371', '2011-05-22', FALSE),
-  ('CALLA', 'CCAYAVILCA', 'KRIS ANGELA', '62985471', '2011-12-01', FALSE),
-  ('CATACORA', 'ASTO', 'ANYELI DANIELA', '62959570', '2011-10-12', FALSE),
-  ('CEVALLOS', 'ALVAREZ', 'NAOMY CLARIBET', '62887421', '2011-07-23', FALSE),
-  ('CONDORI', 'VALLEJOS', 'SOFIA BELEN', '81195532', '2011-06-22', FALSE),
-  ('FLORES', 'MAMANI', 'MARK JUDA', '63795128', '2011-07-05', FALSE),
-  ('GOMEZ', 'CCORIMANYA', 'NADIA PATRICIA', '77621858', '2012-02-28', FALSE),
-  ('HUAMAN', 'CHINO', 'JEFFERSON', '62702567', '2010-12-21', FALSE),
-  ('LOPEZ', 'TACO', 'IAN FRANCO', '62959817', '2011-10-02', FALSE),
-  ('MADALENA', 'HERNANDEZ', 'VICTORIA SARAI', '058691605', '2011-01-07', FALSE),
-  ('MURO', 'LOPEZ', 'VALERIA SOLANGE MILAGROS', '74792828', '2010-10-11', FALSE),
-  ('PACO', 'ZUÑIGA', 'SEBASTIAN JOSUE', '62886247', '2011-07-11', FALSE),
-  ('PEÑARANDA', 'VILCA', 'FABIAN ALONSO', '62886066', '2011-05-30', FALSE),
-  ('QUIRITA', 'UMASI', 'RODRIGO ALDAIR', '63414442', '2011-10-10', FALSE),
-  ('QUISPE', 'QUISPE', 'DAYANA MAYLY', '62834588', '2012-01-20', FALSE),
-  ('ROJAS', 'CRUZ', 'LUCIANA ANDREA', '63135837', '2012-01-19', FALSE),
-  ('ROJAS', 'RODRIGO', 'MAYFER CLARET', '63535863', '2011-09-20', FALSE),
-  ('SILVANO', 'HUALINGA', 'CINTIA ALEXIS', '77625615', '2012-03-25', FALSE),
-  ('TAIPE', 'DIAZ', 'HARVEY FABIAN', '62886988', '2011-08-02', FALSE),
-  ('TEJADA', 'FLORES', 'JAIRO RAMIRO', '78359951', '2010-08-15', FALSE),
-  ('TULA', 'MAMANI', 'XAVIER DARONY', '63170608', '2012-01-09', FALSE),
-  ('TULA', 'SONCCO', 'CARLOS RODRIGO', '63093682', '2012-03-24', FALSE),
-  ('CALACHUA', 'NUÑEZ', 'MARGARET BALERY', '62594545', '2010-04-22', FALSE),
-  ('CASTRO', 'VALDERRAMA', 'KASSANDRA SOLANGE', '62701576', '2010-11-25', FALSE),
-  ('CHAMBILLA', 'CHOQUEMAMANI', 'JOSUE MANUEL', '62678747', '2010-11-16', FALSE),
-  ('CORNEJO', 'MARIN', 'RODRIGO JAIR', '62583534', '2010-04-03', FALSE),
-  ('FERNANDEZ', 'CCAMO', 'RUTH ZUNILDA', '62473332', '2011-01-21', FALSE),
-  ('HUAMAN', 'CCOTO', 'JOSE MANUEL', '62652295', '2010-05-31', FALSE),
-  ('JACINTO', 'RAMOS', 'JACOB', '62113144', '2010-05-12', FALSE),
-  ('MACHACA', 'MINGA', 'ANDREA LUZMIEL', '62551783', '2010-04-10', FALSE),
-  ('MAMANI', 'CHOQUE', 'MELISSA FERNANDA', '61991528', '2010-11-06', FALSE),
-  ('MAMANI', 'CHUCTAYA', 'JIMENA NICOLL', '62171699', '2010-04-22', FALSE),
-  ('MAMANI', 'MACEDO', 'SHAMIR ENRIQUE', '62457907', '2010-07-16', FALSE),
-  ('MAMANI', 'MAMANI', 'LEONEL', '61816540', '2009-07-28', FALSE),
-  ('MENDEZ', 'RIVAS', 'ANGEL PIERO', '62677663', '2010-10-06', FALSE),
-  ('PARI', 'QUISPE', 'CARLOS EDUARDO', '62385734', '2010-05-27', FALSE),
-  ('RODRIGO', 'PORTUGAL', 'MARIA VALENTINA', '62137341', '2010-11-03', FALSE),
-  ('RODRIGUEZ', 'MAMANI', 'JUAN DIEGO', '62702395', '2010-11-26', FALSE),
-  ('SURCO', 'FLORES', 'ALEXANDER WILLY', '62638235', '2010-05-10', FALSE),
-  ('URBINA', 'MAMANI', 'ERICK ANTONNY', '62508870', '2010-08-19', FALSE),
-  ('VILCA', 'HUACO', 'GIMENA DARIANA', '62678773', '2010-11-05', FALSE),
-  ('YANA', 'RODRIGUEZ', 'LETICIA DANUZKA', '62740840', '2010-12-28', FALSE),
-  ('AGUILAR', 'CCAPA', 'JANETH MARELY', '62732730', '2011-01-09', FALSE),
-  ('ALVAREZ', 'CHOQUE', 'DANIELA BRIYIT', '61991545', '2011-03-30', FALSE),
-  ('ARREDONDO', 'BORDA', 'NEYELY ANGELICA', '81093200', '2010-10-25', FALSE),
-  ('BALBIN', 'AGÜERO', 'ANYELI PAMELA', '60661685', '2008-06-10', FALSE),
-  ('BALBIN', 'AGÜERO', 'CARLOS THAYLOR', '63188702', '2010-04-11', FALSE),
-  ('CACERES', 'TULA', 'CARLOS JOSHUE', '62516332', '2010-12-31', FALSE),
-  ('CHILE', 'QUISPE', 'JONATAN JUVER', '77987002', '2010-06-06', FALSE),
-  ('CONDORI', 'DIAZ', 'ANGELA YUREMY', '62457644', '2010-06-24', FALSE),
-  ('FLORES', 'GONZALES', 'TELMA VALENTINA', '62741619', '2011-03-01', FALSE),
-  ('HUALLPA', 'MALLMA', 'ALEXIS GUDIEL', '74785420', '2010-09-28', FALSE),
-  ('JANAMPA', 'SERRANO', 'LEONARD', '62458461', '2010-08-10', FALSE),
-  ('LUQUE', 'GUZMAN', 'ARACELY DAYANA', '62756624', '2011-03-09', FALSE),
-  ('MORA', 'QUISPE', 'LUNA URPI', '62436895', '2010-07-05', FALSE),
-  ('PASTOR', 'MATUTE', 'ENITH ANEL', '62454839', '2010-08-15', FALSE),
-  ('PEREZ', 'PAYE', 'YADHIRA MIRELLA', '62446091', '2010-08-07', FALSE),
-  ('QUISPE', 'HUAMANI', 'LUZ BRISAYDA', '62361178', '2011-01-20', FALSE),
-  ('SULLCA', 'HANCCO', 'ABRAHAN EDU', '62784002', '2011-03-28', FALSE),
-  ('TARIFA', 'SURCO', 'YAHIR', '61824998', '2009-06-16', FALSE),
-  ('VILCAPE', 'MAMANI', 'FRANK DIEGO', '61825862', '2009-06-03', FALSE),
-  ('ANAHUA', 'QUISPE', 'EHIDAN VICTOR', '61414103', '2008-07-26', FALSE),
-  ('APAZA', 'YANARICO', 'FIORELA BRIGGITTE', '62593600', '2010-02-20', FALSE),
-  ('CABRERA', 'MARTINEZ', 'LUJAN DEL ROCIO', '61826064', '2009-06-22', FALSE),
-  ('CHOQUE', 'CASA', 'JUAN GABRIEL', '63535839', '2010-03-27', FALSE),
-  ('CHOQUEMAQUE', 'COLQUE', 'MELISSA NIKOL', '61921783', '2010-03-13', FALSE),
-  ('DAVILA', 'HUMPIRI', 'MARIANA LIZETH', '78592709', '2009-07-18', FALSE),
-  ('GUILLEN', 'CCORAHUA', 'JULIO RODRIGO', '61800695', '2009-05-22', FALSE),
-  ('HUIRMA', 'VALENCIA', 'HUGO ARMANDO', '61824969', '2009-06-03', FALSE),
-  ('MAMANI', 'TITO', 'AVRIL ANYELI', '61800493', '2009-04-22', FALSE),
-  ('MENDOZA', 'FIGUEROA', 'VALERI ALESSANDRA', '61054171', '2007-07-16', FALSE),
-  ('OCHOA', 'FERNANDEZ', 'JOSE MANUEL', '61928865', '2009-12-17', FALSE),
-  ('ORDOÑEZ', 'LABAN', 'TONNY AXEL', '61802117', '2009-06-30', FALSE),
-  ('ORTIZ', 'TAIPE', 'YEIKO ANYELO', '61883814', '2010-02-01', FALSE),
-  ('PACHA', 'OBANDO', 'ESTEFANY KASANDRA', '61892497', '2009-08-28', FALSE),
-  ('QUISPE', 'SULLO', 'JULIO CESAR', '61574960', '2009-08-30', FALSE),
-  ('RAYME', 'AGUILAR', 'RONY', '61708669', '2009-09-01', FALSE),
-  ('ROQUE', 'CCORAHUA', 'GABRIEL ALEXANDER', '62562461', '2010-01-17', FALSE),
-  ('SALAS', 'MEDINA', 'JOAN JOSUE', '61894606', '2009-11-29', FALSE),
-  ('SIFUENTES', 'QUISPE', 'NICOLAS AUGUSTO', '62347602', '2009-12-04', FALSE),
-  ('TORRES', 'HANCCO', 'DANIELA MICHELL', '62818330', '2010-02-27', FALSE),
-  ('UNSUETA', 'SERRANO', 'FRANK DEIVIS', '62765923', '2009-10-07', FALSE),
-  ('VALLEJO', 'CCOYLLULLI', 'FLOR ARELI', '61630787', '2009-12-16', FALSE),
-  ('VERA', 'CONDORI', 'LI CAROLINA', '61938187', '2009-05-01', FALSE),
-  ('YUPA', 'QUISPE', 'DAVID RICARDO JUNIOR', '61897571', '2009-10-06', FALSE),
-  ('ALDUDE', 'CENTENO', 'JHOSEP FERNANDO', '61758827', '2009-05-19', FALSE),
-  ('ANQUISE', 'YANA', 'MIGUEL ANGEL RAUL', '62562842', '2010-02-23', FALSE),
-  ('ARAPA', 'TUPAC', 'ANTHONY BERNY', '61799346', '2009-05-09', FALSE),
-  ('ARMA', 'CCALLUCHE', 'YALU ARACELY', '61893790', '2009-10-11', FALSE),
-  ('ARREDONDO', 'BORDA', 'MARIA FERNANDA', '62469641', '2009-11-24', FALSE),
-  ('BEDOYA', 'QUISPE', 'ANGEL YEYSON', '61459634', '2008-12-25', FALSE),
-  ('CCANCHILLO', 'GUZMAN', 'ROBINHO', '61455977', '2008-09-15', FALSE),
-  ('CCOTO', 'CAYANI', 'NIKOL TAYRA', '61968741', '2009-07-14', FALSE),
-  ('CONDORI', 'MAMANI', 'CARLOS DANIEL', '61893892', '2009-11-13', FALSE),
-  ('CUTIPA', 'CHISE', 'RICARDO MAXIMO', '62820387', '2009-05-15', FALSE),
-  ('FARFAN', 'PUMA', 'MIGUEL BRANDO', '61847829', '2009-08-05', FALSE),
-  ('FLORES', 'SOTO', 'MENLY JHONSO', '60330186', '2009-11-30', FALSE),
-  ('HUAMAN', 'AMANQUI', 'TANIA CAMILA', '61800319', '2009-05-07', FALSE),
-  ('IDME', 'IDME', 'ERICK SALVADOR', '62516300', '2009-08-02', FALSE),
-  ('MAMANI', 'ARAPA', 'DAISY', '61635477', '2009-07-22', FALSE),
-  ('MASCO', 'AYVAR', 'EVO ESTANISLAO', '61974414', '2009-11-27', FALSE),
-  ('MOTTOCCANCHI', 'AYAMAMANI', 'PIERINA MIZU', '61938176', '2009-04-10', FALSE),
-  ('NUÑONCA', 'FLORES', 'ROBERT ALEXANDER', '61461252', '2009-02-05', FALSE),
-  ('PALLI', 'ENRIQUEZ', 'GEORGE RICARDO', '62352132', '2009-12-20', FALSE),
-  ('PARI', 'CONDORI', 'IAN FLAVIO CESAR', '62313012', '2009-11-02', FALSE),
-  ('PILA', 'QUISPE', 'MISHEYDA', '62372440', '2010-03-09', FALSE),
-  ('PUMA', 'YUPANQUI', 'YOSELIN KEILA', '61825377', '2009-07-06', FALSE),
-  ('SARMIENTO', 'SARMIENTO', 'SEBASTIAN OLMAR', '61730564', '2009-07-05', FALSE),
-  ('TUFIÑO', 'HURTADO', 'NOEMI ESTHER', '73556401', '2009-07-19', FALSE),
-  ('YUCRA', 'VALENCIA', 'NAYSHEL CLARIBEHT', '62557422', '2010-02-22', FALSE)
-ON CONFLICT (dni) DO NOTHING;
+  (203, '00000063153927', 'ALANIA', 'VICHATA', 'DAYIRO ALEXIS', 'H', '63153927', NULL, NULL, '2013-07-21', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (204, '00000081228111', 'AVILA', 'USKA', 'ARIANA GUADALUPE', 'M', '81228111', NULL, NULL, '2013-08-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (205, '16011434400028', 'BORDA', 'CALSINA', 'RAFAEL YASMANI', 'H', '78478089', NULL, NULL, '2014-03-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (206, '00000078081538', 'CALCINA', 'NOA', 'KIARA MAYTE', 'M', '78081538', NULL, NULL, '2013-04-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (207, '00000078292861', 'CHAVEZ', 'MAMANI', 'ABAD ALAIN', 'H', '78292861', NULL, NULL, '2013-08-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (208, '00000078352131', 'CHILE', 'QUISPE', 'WILLY RODRIGO', 'H', '78352131', NULL, NULL, '2013-12-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (209, '00000078329575', 'CHOQUEMAQUE', 'COLQUE', 'EBANDRO YONATHAN', 'H', '78329575', NULL, NULL, '2013-10-25', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (210, '00000063073431', 'CHUMBES', 'DEVERA', 'ANDY JOSHUA', 'H', '63073431', NULL, NULL, '2013-06-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (211, '00000081196156', 'CONDORI', 'DIAZ', 'THIAGO MYLAN', 'H', '81196156', NULL, NULL, '2013-10-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (212, '25021929500050', 'DIAZ', 'VIERA', 'LUZMAR ANDREA', 'M', NULL, NULL, NULL, '2013-08-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (213, '00000078435507', 'GÜERE', 'HUARCA', 'ANGELO EMANUEL', 'H', '78435507', NULL, NULL, '2014-01-29', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (214, '17022575500058', 'HUAMAN', 'AGUIRRE', 'JORGE ERASMO', 'H', '81228357', NULL, NULL, '2013-07-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (215, '18171288400018', 'HUAMAN', 'MENDEZ', 'ROYER YENKO', 'H', '78211766', NULL, NULL, '2013-06-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (216, '18074425000158', 'HUAYCANI', 'CALISAYA', 'GUSTAVO ALEJANDRO', 'H', '78511532', NULL, NULL, '2014-03-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (217, '00000078305980', 'ILASACA', 'PAMPA', 'MILAGROS ESPERANZA', 'M', '78305980', NULL, NULL, '2013-06-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (218, '00000081118551', 'MUÑA', 'TOROCAHUA', 'DILAND ANDREE', 'H', '81118551', NULL, NULL, '2013-04-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (219, '00000081197024', 'OVIEDO', 'CASAZOLA', 'FABIANA DAYNÉ', 'M', '81197024', NULL, NULL, '2013-10-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (220, '00000078440075', 'PANDIA', 'QUISPE', 'AMY', 'M', '78440075', NULL, NULL, '2014-01-16', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (221, '17126348200098', 'PIZARRO', 'VILCAPAZA', 'ADRIANO JOAQUIN', 'H', '78263838', NULL, NULL, '2013-09-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (222, '00000078235058', 'SALHUA', 'CCOROPUNA', 'DIEGO SEBASTIAN', 'H', '78235058', NULL, NULL, '2013-07-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (223, '00000078392718', 'SEDANO', 'QUISPE', 'WILIAN', 'H', '78392718', NULL, NULL, '2013-12-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (224, '00000078153451', 'SONCCO', 'CALCINA', 'FLOR MARILY', 'M', '78153451', NULL, NULL, '2013-05-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (225, '17022575500138', 'TAIPE', 'DIAZ', 'ALANIS DASHA', 'M', '81228148', NULL, NULL, '2013-09-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (226, '00000078420925', 'TORRES', 'LUQUE', 'FIORELA YESENIA', 'M', '78420925', NULL, NULL, '2014-01-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (227, '00000081539952', 'TULA', 'MAMANI', 'FRANCO AARON', 'H', '81539952', NULL, NULL, '2014-01-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (228, '17022575500188', 'VERA', 'HANCCO', 'NAYELI MISHELL', 'M', '81539445', NULL, NULL, '2014-01-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (229, '18022575500248', 'YANA', 'RODRIGUEZ', 'MARIA BELEN', 'M', '78646536', NULL, NULL, '2014-02-25', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (230, '00000078132929', 'ALEJO', 'GAMARRA', 'RUTH AYUMI', 'M', '78132929', NULL, NULL, '2013-05-18', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (231, '17089286900018', 'AMANCA', 'TTITO', 'EDUARDO EFRAIN', 'H', '81560158', NULL, NULL, '2013-05-25', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (232, '00000078218966', 'BUENDIA', 'MENDOZA', 'LUCAS JANO', 'H', '78218966', NULL, NULL, '2013-08-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (233, '00000081169449', 'CCALLO', 'CHINCHERCOMA', 'JOEL VICTOR', 'H', '81169449', NULL, NULL, '2013-08-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (234, '00000078722246', 'CHACO', 'BARANDIARAN', 'YHERIK AUGUSTO YSBAIL', 'H', '78722246', NULL, NULL, '2013-02-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (235, '00000080931057', 'CHIPANA', 'QUISPE', 'AARON CRHISTIAN ABIERY', 'H', '80931057', NULL, NULL, '2014-01-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (236, '17022575500028', 'CHOQUECABANA', 'CALLOHUANCA', 'MILLET IVANA', 'M', '78268274', NULL, NULL, '2013-09-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (237, '00000079208199', 'CHUMBES', 'SERRANO', 'JACK NEYMAR', 'H', '79208199', NULL, NULL, '2013-04-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (238, '00000078051687', 'COPARA', 'HUAYNA', 'NEVENKA JAKELINE', 'M', '78051687', NULL, NULL, '2013-04-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (239, '00000081114430', 'DIAZ', 'TICONA', 'LUHANA KEYLA', 'M', '81114430', NULL, NULL, '2013-05-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (240, '00000078838410', 'HUACHO', 'AGUILAR', 'KELY MARINA', 'M', '78838410', NULL, NULL, '2014-01-21', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (241, '00000081539484', 'JAEN', 'CUTIPA', 'CARLOS DANIEL', 'H', '81539484', NULL, NULL, '2014-01-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (242, '17022575500078', 'LEON', 'BEDOYA', 'KENYA KELEEN', 'M', '78096942', NULL, NULL, '2013-04-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (243, '00000081190234', 'LUQUE', 'PALOMINO', 'HANSEL ISMAEL', 'H', '81190234', NULL, NULL, '2013-12-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (244, '18133881300048', 'MARURE', 'MAMANI', 'ASHLY JAHAIRA', 'M', '78492780', NULL, NULL, '2014-03-06', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (245, '17126348200058', 'MENDEZ', 'RIVAS', 'JEANPIERE MAYCOL', 'H', '81558691', NULL, NULL, '2014-02-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (246, '00000078221020', 'PACCO', 'CALCINA', 'NEYMAR RODRIGO', 'H', '78221020', NULL, NULL, '2013-07-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (247, '00000081558783', 'PANCCA', 'QUISPE', 'ORLANDO JESUS', 'H', '81558783', NULL, NULL, '2014-03-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (248, '17022575500108', 'PORTUGAL', 'OVIEDO', 'ARANTZA KEISHLA', 'M', '81194454', NULL, NULL, '2013-09-21', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (249, '00000078133506', 'QUISPE', 'PALACIOS', 'MIRIAM FERNANDA', 'M', '78133506', NULL, NULL, '2013-05-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (250, '00000081540347', 'RAMOS', 'CUTIRE', 'DIEGO ARNULFO', 'H', '81540347', NULL, NULL, '2014-02-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (251, '00000090187002', 'ROJO', 'QUISPE', 'BRITTANY NIKOLE', 'M', '90187002', NULL, NULL, '2013-07-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (252, '17089286900098', 'SALAS', 'BARRIOS', 'BENJAMIN EMANUEL', 'H', '81539239', NULL, NULL, '2014-01-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (253, '00000078161153', 'SANDI', 'BALTA', 'LUCIANA ANABEL', 'M', '78161153', NULL, NULL, '2013-06-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (254, '00000081558831', 'SEVILLANOS', 'RODRIGO', 'ADRIANO JOEL', 'H', '81558831', NULL, NULL, '2014-03-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (255, '00000078176027', 'TIPULA', 'DIAZ', 'EMANUEL JORGE', 'H', '78176027', NULL, NULL, '2013-07-12', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (256, '00000081444212', 'VELASQUEZ', 'TULA', 'FREDY ANGEL', 'H', '81444212', NULL, NULL, '2013-11-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (257, '00000090276763', 'VILLAFUERTE', 'POVEA', 'LIAM NEYMAR', 'H', '90276763', NULL, NULL, '2014-02-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (258, '00000081195564', 'ASCENCIOS', 'CCAHUA', 'DANIEL ELIAS', 'H', '81195564', NULL, NULL, '2012-10-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (259, '00000081377787', 'ASCENCIOS', 'GARCIA', 'LUIS CARLOS', 'H', '81377787', NULL, NULL, '2012-06-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (260, '00000062146335', 'BERNAL', 'ESPINOZA', 'MELANI JULIETA', 'M', '62146335', NULL, NULL, '2012-09-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (261, '00000063244994', 'CARCAUSTO', 'YARICE', 'NHILA ABIGAIL', 'M', '63244994', NULL, NULL, '2012-05-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (262, '00000063533332', 'CCOSCCO', 'CEREZO', 'ANGIE YUDELY', 'M', '63533332', NULL, NULL, '2012-10-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (263, '00000081052155', 'CHAISA', 'VILCA', 'YANDY ALICIA', 'M', '81052155', NULL, NULL, '2012-11-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (264, '15145554200018', 'CHIPANE', 'PORTILLO', 'ANA GRAYLIN', 'M', '62819420', NULL, NULL, '2011-04-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (265, '16133750000018', 'CORNEJO', 'HUILLCA', 'JUAN GABRIEL', 'H', '63535664', NULL, NULL, '2012-06-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (266, '00000081113858', 'FLORES', 'MAMANI', 'SULLY NAOMI', 'M', '81113858', NULL, NULL, '2013-03-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (267, '00000077875829', 'GARCIA', 'ILLACUTIPA', 'ARIANA ZAHORY', 'M', '77875829', NULL, NULL, '2012-11-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (268, '00000081112330', 'GOMEZ', 'QUISPE', 'FABRIZIO JEDAM', 'H', '81112330', NULL, NULL, '2013-02-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (269, '00000062958658', 'HUAMANI', 'CHURATA', 'ALEXANDRO YEFERSSON', 'H', '62958658', NULL, NULL, '2011-10-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (270, '20028776300058', 'MORILLO', 'POLO', 'KRISTHIAN ADRIANGEL', 'H', NULL, NULL, NULL, '2012-06-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (271, '16137323200198', 'NAHUE', 'LEON', 'PAMELA MASIEL', 'M', '81093756', NULL, NULL, '2012-12-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (272, '22021929500050', 'ORTIZ', 'DE LA ROSA', 'CESAR ALEJANDRO', 'H', NULL, NULL, NULL, '2012-06-29', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (273, '00000063735811', 'PARI', 'CONDORI', 'THAYZ KEYRA', 'M', '63735811', NULL, NULL, '2013-01-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (274, '16022575500128', 'PUMA', 'YUPANQUI', 'CINTIA ANABEL', 'M', '81078343', NULL, NULL, '2012-10-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (275, '00000063429546', 'PUSACLLA', 'VELA', 'MICAELA', 'M', '63429546', NULL, NULL, '2012-11-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (276, '19111423000018', 'QUINTERO', 'GUIPE', 'AARON GABRIEL', 'H', NULL, NULL, NULL, '2012-09-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (277, '16022575500148', 'RUIZ', 'ZEVALLOS', 'ERICK GHAEL', 'H', '63735801', NULL, NULL, '2012-12-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (278, '00000077862645', 'SALAS', 'MEDINA', 'GABRIEL MATEO', 'H', '77862645', NULL, NULL, '2012-06-25', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (279, '00000063727904', 'SANCHEZ', 'BELTRAN', 'BRITNEY MELANY', 'M', '63727904', NULL, NULL, '2012-04-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (280, '00000063727905', 'SANCHEZ', 'BELTRAN', 'DANY JHOSHIMAR', 'H', '63727905', NULL, NULL, '2012-04-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (281, '17089286900148', 'SARMIENTO', 'SARMIENTO', 'DANIEL STHIPF', 'H', '81132770', NULL, NULL, '2013-01-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (282, '16022575500168', 'SONCCO', 'APAZA', 'YEAN CARLOS HUBER', 'H', '78032709', NULL, NULL, '2013-02-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (283, '21022008700018', 'ANUEL', 'PADILLA', 'CRISTAL JEANCARLAS', 'M', NULL, NULL, NULL, '2012-11-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (284, '19021929500028', 'AVENDAÑO', 'GONZALEZ', 'ROYSNEL AARON', 'H', NULL, NULL, NULL, '2013-03-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (285, '16022575500038', 'BELIZARIO', 'CCALLO', 'KELLY MASHIEL', 'M', '77653181', NULL, NULL, '2012-05-18', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (286, '00000081063789', 'BOZA', 'PORTILLA', 'DAYIRO BENJAMIN', 'H', '81063789', NULL, NULL, '2012-10-31', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (287, '00000081047810', 'CALLA', 'HUANCA', 'SERGIO ADOLFO', 'H', '81047810', NULL, NULL, '2012-07-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (288, '00000080857111', 'CCORAHUA', 'DIAZ', 'LUIS GABRIEL', 'H', '80857111', NULL, NULL, '2012-08-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (289, '00000080868132', 'CCORPUNA', 'TURPO', 'TANIA NICOL', 'M', '80868132', NULL, NULL, '2013-03-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (290, '00000080985895', 'CCOTO', 'CAYANI', 'MATHIAS JULIAN', 'H', '80985895', NULL, NULL, '2012-10-29', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (291, '00000077824702', 'CENTENO', 'IQUIAPAZA', 'ZULLY BELLA DULZE', 'M', '77824702', NULL, NULL, '2012-09-12', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (292, '00000077724737', 'JAYO', 'HUAHUACONDORI', 'LUIS FERNANDO', 'H', '77724737', NULL, NULL, '2012-06-18', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (293, '00000081093190', 'KAIRA', 'HUAYTA', 'LUIS FERNANDO', 'H', '81093190', NULL, NULL, '2012-08-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (294, '00000077886247', 'LOPEZ', 'ZUÑIGA', 'ENDERSON ALEXANDER', 'H', '77886247', NULL, NULL, '2012-10-29', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (295, '00000077879158', 'MAMANI', 'JARA', 'ARTUR JHENRRY', 'H', '77879158', NULL, NULL, '2012-11-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (296, '00000081093307', 'MEDINA', 'DIAZ', 'ANGELA GABRIELA', 'M', '81093307', NULL, NULL, '2012-11-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (297, '00000081156174', 'MELO', 'CHILO', 'LEONEL YORDY', 'H', '81156174', NULL, NULL, '2013-02-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (298, '19139745400118', 'MONSALVE', 'CONTRERAS', 'CHRISTOFER ALDREY DEL CARMEN', 'H', NULL, NULL, NULL, '2012-07-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (299, '16153697800048', 'OVIEDO', 'CASAZOLA', 'TATIANA ANDREA', 'M', '77728816', NULL, NULL, '2012-05-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (300, '00000063232353', 'PACHA', 'GONZALES', 'ADRIANO ALBERT YOSIMAR', 'H', '63232353', NULL, NULL, '2012-05-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (301, '00000063244987', 'PAPEL', 'HOLGUIN', 'ABRYL JAMYLET', 'M', '63244987', NULL, NULL, '2012-05-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (302, '00000063762206', 'PASTOR', 'MATUTE', 'JHARETH ANTONELA', 'M', '63762206', NULL, NULL, '2012-07-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (303, '00000063423127', 'QUISPE', 'HUAMANI', 'YEISON HEYNER', 'H', '63423127', NULL, NULL, '2012-08-08', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (304, '00000081094308', 'RIOS', 'VILCA', 'ADRIANA BELEN ESTRELLA', 'M', '81094308', NULL, NULL, '2013-01-06', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (305, '00000077759868', 'TAMO', 'COAGUILA', 'LUIS FERNANDO', 'H', '77759868', NULL, NULL, '2012-07-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (306, '00000062832079', 'TRUJILLO', 'CORREA', 'THIAGO LINCOL', 'H', '62832079', NULL, NULL, '2013-01-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (307, '00000077980612', 'URBINA', 'MAMANI', 'ESTER ANTONELA', 'M', '77980612', NULL, NULL, '2013-01-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (308, '16022575500208', 'ZAPANA', 'RIVERA', 'DAYIRO JOSUE', 'H', '81094442', NULL, NULL, '2012-11-16', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (309, '00000062222818', 'AYALA', 'MEZA', 'BELTSASAR', 'H', '62222818', NULL, NULL, '2010-10-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (310, '00000063114715', 'CCACCASACA', 'FOLLANO', 'RUTH KAREN', 'M', '63114715', NULL, NULL, '2012-03-16', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (311, '14221721500018', 'CHAMBI', 'CALDERON', 'LEYDY MILAGROS', 'M', '62939917', NULL, NULL, '2011-12-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (312, '00000063093662', 'CHIPA', 'HUAMANI', 'PAOLA ALEXANDRA', 'M', '63093662', NULL, NULL, '2012-02-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (313, '00000063084913', 'CHUMBES', 'SERRANO', 'FELIPE ARMANDO', 'H', '63084913', NULL, NULL, '2011-11-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (314, '25125938100010', 'COA', 'CAMPERO', 'RICGIAN DANIEL', 'H', '34292571', NULL, NULL, '2011-01-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (315, '00000063084451', 'DIAZ', 'PACCI', 'BRAYAN ALONSO', 'H', '63084451', NULL, NULL, '2011-12-08', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (316, '00000062701495', 'FERNANDEZ', 'HANCCO', 'MIGUEL ANGEL', 'H', '62701495', NULL, NULL, '2010-10-18', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (317, '00000062818924', 'FLORES', 'MAMANI', 'LUANA KONY NANCY', 'M', '62818924', NULL, NULL, '2011-04-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (318, '15022508600248', 'GARATE', 'YLLANES', 'CARLOS FRANCISCO', 'H', '62960498', NULL, NULL, '2011-10-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (319, '21133879700018', 'GOYO', 'MATTIEE', 'AMBAR ALEXANDRA', 'M', NULL, NULL, NULL, '2011-02-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (320, '00000062819999', 'HUIRMA', 'VALENCIA', 'JHON RONALDO', 'H', '62819999', NULL, NULL, '2011-04-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (321, '00000062888790', 'LAURA', 'QUISPE', 'JOSELITO SEBASTIAN', 'H', '62888790', NULL, NULL, '2011-09-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (322, '13270560100018', 'LOPEZ', 'ZUÑIGA', 'JENNIFER BRIGITH DE LOS ANGELES', 'M', '77109365', NULL, NULL, '2011-05-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (323, '00000062831191', 'MAMANI', 'JILAJA', 'FIORELLA MILAGROS', 'M', '62831191', NULL, NULL, '2011-07-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (324, '00000063693766', 'MAMANI', 'ZAMATA', 'LIZBETH MARYORI', 'M', '63693766', NULL, NULL, '2012-02-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (325, '14022575500088', 'MASCO', 'CEREZO', 'KAREN MILAGROS', 'M', '62702152', NULL, NULL, '2010-12-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (326, '00000062886488', 'PACHECO', 'RAMOS', 'BETSY YAMILA', 'M', '62886488', NULL, NULL, '2011-06-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (327, '00000062858901', 'PALLI', 'ENRIQUEZ', 'JAMES OXFORD', 'H', '62858901', NULL, NULL, '2011-07-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (328, '00000062254243', 'PUMA', 'CONDORI', 'PATRIK DASHYRO', 'H', '62254243', NULL, NULL, '2011-06-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (329, '15022575500118', 'QUISPE', 'REAÑO', 'ANGELO HAIR', 'H', '62888332', NULL, NULL, '2011-08-08', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (330, '00000063174354', 'QUISPE', 'URURI', 'ALVARO JHAIR', 'H', '63174354', NULL, NULL, '2012-01-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (331, '15145554200108', 'RAMOS', 'CUTIRE', 'NAYELI', 'M', '62259227', NULL, NULL, '2011-08-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (332, '15131489700118', 'RIVAS', 'BENITES', 'LUCERO', 'M', '63293139', NULL, NULL, '2011-07-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (333, '00000062958754', 'SUAREZ', 'MANGO', 'RICARDO GEANFRANCO', 'H', '62958754', NULL, NULL, '2011-08-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (334, '15022575500148', 'TALAVERA', 'ZEVALLOS', 'ANDRE YAREL', 'H', '63093666', NULL, NULL, '2012-03-06', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (335, '15203581500068', 'TORRES', 'AGUIRRE', 'LUIS JAVIER', 'H', '62810398', NULL, NULL, '2011-04-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (336, '16089291900088', 'UTURUNCO', 'INQUILLAY', 'ROSYLINDA', 'M', '63047429', NULL, NULL, '2012-01-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (337, '15145554200028', 'VILCA', 'PACHA', 'MATEO ALEXANDER', 'H', '63083855', NULL, NULL, '2011-12-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (338, '00000077598280', 'VILLEGAS', 'CHAVEZ', 'HUGO DANIEL ALEJANDRO', 'H', '77598280', NULL, NULL, '2012-03-18', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (339, '00000062231011', 'YUJRA', 'INCACUTIPA', 'LIZ KATHERIN', 'M', '62231011', NULL, NULL, '2011-04-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (340, '00000062083883', 'ALANIA', 'VICHATA', 'KATERIN SARA', 'M', '62083883', NULL, NULL, '2011-04-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (341, '00000063230264', 'ANCCO', 'CAHUANA', 'BRENDA IVET', 'M', '63230264', NULL, NULL, '2012-02-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (342, '15022575500028', 'ARAPA', 'TUPAC', 'ALDANA KARELI', 'M', '63084478', NULL, NULL, '2011-12-21', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (343, '15148611600018', 'ARREDONDO', 'BORDA', 'DAYANA MARIBEL', 'M', '63084979', NULL, NULL, '2012-01-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (344, '22021929500070', 'BOLIVAR', 'MARIN', 'VICTOR EDUARDO', 'H', 'V33870371', NULL, NULL, '2011-05-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (345, '15022575500038', 'CALLA', 'CCAYAVILCA', 'KRIS ANGELA', 'M', '62985471', NULL, NULL, '2011-12-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (346, '15145554200138', 'CATACORA', 'ASTO', 'ANYELI DANIELA', 'M', '62959570', NULL, NULL, '2011-10-12', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (347, '00000062887421', 'CEVALLOS', 'ALVAREZ', 'NAOMY CLARIBET', 'M', '62887421', NULL, NULL, '2011-07-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (348, '15133881300028', 'CONDORI', 'VALLEJOS', 'SOFIA BELEN', 'M', '81195532', NULL, NULL, '2011-06-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (349, '15089286900168', 'FLORES', 'MAMANI', 'MARK JUDA', 'H', '63795128', NULL, NULL, '2011-07-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (350, '00000077621858', 'GOMEZ', 'CCORIMANYA', 'NADIA PATRICIA', 'M', '77621858', NULL, NULL, '2012-02-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (351, '00000062702567', 'HUAMAN', 'CHINO', 'JEFFERSON', 'H', '62702567', NULL, NULL, '2010-12-21', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (352, '15089286900068', 'LOPEZ', 'TACO', 'IAN FRANCO', 'H', '62959817', NULL, NULL, '2011-10-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (353, '19021929500058', 'MADALENA', 'HERNANDEZ', 'VICTORIA SARAI', 'M', '058691605', NULL, NULL, '2011-01-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (354, '00000074792828', 'MURO', 'LOPEZ', 'VALERIA SOLANGE MILAGROS', 'M', '74792828', NULL, NULL, '2010-10-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (355, '00000062886247', 'PACO', 'ZUÑIGA', 'SEBASTIAN JOSUE', 'H', '62886247', NULL, NULL, '2011-07-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (356, '00000062886066', 'PEÑARANDA', 'VILCA', 'FABIAN ALONSO', 'H', '62886066', NULL, NULL, '2011-05-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (357, '00000063414442', 'QUIRITA', 'UMASI', 'RODRIGO ALDAIR', 'H', '63414442', NULL, NULL, '2011-10-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (358, '00000062834588', 'QUISPE', 'QUISPE', 'DAYANA MAYLY', 'M', '62834588', NULL, NULL, '2012-01-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (359, '00000063135837', 'ROJAS', 'CRUZ', 'LUCIANA ANDREA', 'M', '63135837', NULL, NULL, '2012-01-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (360, '00000063535863', 'ROJAS', 'RODRIGO', 'MAYFER CLARET', 'M', '63535863', NULL, NULL, '2011-09-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (361, '19137137600028', 'RUIZ', 'BRACAMONTE', 'ANTONELLA ALEJANDRA', 'M', NULL, NULL, NULL, '2011-02-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (362, '20028757300028', 'SEGOVIA', 'ARIAS', 'KEINERTH JOSÉ', 'H', NULL, NULL, NULL, '2011-09-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (363, '00000077625615', 'SILVANO', 'HUALINGA', 'CINTIA ALEXIS', 'M', '77625615', NULL, NULL, '2012-03-25', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (364, '15022575500138', 'TAIPE', 'DIAZ', 'HARVEY FABIAN', 'H', '62886988', NULL, NULL, '2011-08-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (365, '14022575500158', 'TEJADA', 'FLORES', 'JAIRO RAMIRO', 'H', '78359951', NULL, NULL, '2010-08-15', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (366, '15133814400028', 'TULA', 'MAMANI', 'XAVIER DARONY', 'H', '63170608', NULL, NULL, '2012-01-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (367, '15126348200068', 'TULA', 'SONCCO', 'CARLOS RODRIGO', 'H', '63093682', NULL, NULL, '2012-03-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (368, '00000062594545', 'CALACHUA', 'NUÑEZ', 'MARGARET BALERY', 'M', '62594545', NULL, NULL, '2010-04-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (369, '14022575500048', 'CASTRO', 'VALDERRAMA', 'KASSANDRA SOLANGE', 'M', '62701576', NULL, NULL, '2010-11-25', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (370, '12145310700018', 'CHAMBILLA', 'CHOQUEMAMANI', 'JOSUE MANUEL', 'H', '62678747', NULL, NULL, '2010-11-16', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (371, '23057829400010', 'CONTRERAS', 'RANGEL', 'DANIELA ANAHIS', 'M', NULL, NULL, NULL, '2010-06-08', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (372, '00000062583534', 'CORNEJO', 'MARIN', 'RODRIGO JAIR', 'H', '62583534', NULL, NULL, '2010-04-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (373, '00000062473332', 'FERNANDEZ', 'CCAMO', 'RUTH ZUNILDA', 'M', '62473332', NULL, NULL, '2011-01-21', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (374, '14022575500068', 'HUAMAN', 'CCOTO', 'JOSE MANUEL', 'H', '62652295', NULL, NULL, '2010-05-31', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (375, '00000062113144', 'JACINTO', 'RAMOS', 'JACOB', 'H', '62113144', NULL, NULL, '2010-05-12', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (376, '13147703100098', 'MACHACA', 'MINGA', 'ANDREA LUZMIEL', 'M', '62551783', NULL, NULL, '2010-04-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (377, '00000061991528', 'MAMANI', 'CHOQUE', 'MELISSA FERNANDA', 'M', '61991528', NULL, NULL, '2010-11-06', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (378, '15152885000018', 'MAMANI', 'CHUCTAYA', 'JIMENA NICOLL', 'M', '62171699', NULL, NULL, '2010-04-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (379, '15089302400158', 'MAMANI', 'MACEDO', 'SHAMIR ENRIQUE', 'H', '62457907', NULL, NULL, '2010-07-16', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (380, '00000061816540', 'MAMANI', 'MAMANI', 'LEONEL', 'H', '61816540', NULL, NULL, '2009-07-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (381, '00000062677663', 'MENDEZ', 'RIVAS', 'ANGEL PIERO', 'H', '62677663', NULL, NULL, '2010-10-06', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (382, '00000062385734', 'PARI', 'QUISPE', 'CARLOS EDUARDO', 'H', '62385734', NULL, NULL, '2010-05-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (383, '00000062137341', 'RODRIGO', 'PORTUGAL', 'MARIA VALENTINA', 'M', '62137341', NULL, NULL, '2010-11-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (384, '14022575500098', 'RODRIGUEZ', 'MAMANI', 'JUAN DIEGO', 'H', '62702395', NULL, NULL, '2010-11-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (385, '13145310700098', 'SURCO', 'FLORES', 'ALEXANDER WILLY', 'H', '62638235', NULL, NULL, '2010-05-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (386, '00000062508870', 'URBINA', 'MAMANI', 'ERICK ANTONNY', 'H', '62508870', NULL, NULL, '2010-08-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (387, '00000062678773', 'VILCA', 'HUACO', 'GIMENA DARIANA', 'M', '62678773', NULL, NULL, '2010-11-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (388, '00000062740840', 'YANA', 'RODRIGUEZ', 'LETICIA DANUZKA', 'M', '62740840', NULL, NULL, '2010-12-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (389, '00000062732730', 'AGUILAR', 'CCAPA', 'JANETH MARELY', 'M', '62732730', NULL, NULL, '2011-01-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (390, '00000061991545', 'ALVAREZ', 'CHOQUE', 'DANIELA BRIYIT', 'M', '61991545', NULL, NULL, '2011-03-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (391, '00000081093200', 'ARREDONDO', 'BORDA', 'NEYELY ANGELICA', 'M', '81093200', NULL, NULL, '2010-10-25', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (392, '00000060661685', 'BALBIN', 'AGÜERO', 'ANYELI PAMELA', 'M', '60661685', NULL, NULL, '2008-06-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (393, '00000063188702', 'BALBIN', 'AGÜERO', 'CARLOS THAYLOR', 'H', '63188702', NULL, NULL, '2010-04-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (394, '13147703100108', 'CACERES', 'TULA', 'CARLOS JOSHUE', 'H', '62516332', NULL, NULL, '2010-12-31', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (395, '00000077987002', 'CHILE', 'QUISPE', 'JONATAN JUVER', 'H', '77987002', NULL, NULL, '2010-06-06', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (396, '14145554200078', 'CONDORI', 'DIAZ', 'ANGELA YUREMY', 'M', '62457644', NULL, NULL, '2010-06-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (397, '14126348200028', 'FLORES', 'GONZALES', 'TELMA VALENTINA', 'M', '62741619', NULL, NULL, '2011-03-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (398, '00000074785420', 'HUALLPA', 'MALLMA', 'ALEXIS GUDIEL', 'H', '74785420', NULL, NULL, '2010-09-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (399, '13147703100078', 'JANAMPA', 'SERRANO', 'LEONARD', 'H', '62458461', NULL, NULL, '2010-08-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (400, '14126348200038', 'LUQUE', 'GUZMAN', 'ARACELY DAYANA', 'M', '62756624', NULL, NULL, '2011-03-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (401, '22022643100038', 'MENDEZ', 'RODRIGUEZ', 'CRISTIAN XAVIER', 'H', NULL, NULL, NULL, '2010-08-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (402, '00000062436895', 'MORA', 'QUISPE', 'LUNA URPI', 'M', '62436895', NULL, NULL, '2010-07-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (403, '14174433000038', 'PASTOR', 'MATUTE', 'ENITH ANEL', 'M', '62454839', NULL, NULL, '2010-08-15', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (404, '14145894200188', 'PEREZ', 'PAYE', 'YADHIRA MIRELLA', 'M', '62446091', NULL, NULL, '2010-08-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (405, '00000062361178', 'QUISPE', 'HUAMANI', 'LUZ BRISAYDA', 'M', '62361178', NULL, NULL, '2011-01-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (406, '15241592100018', 'SULLCA', 'HANCCO', 'ABRAHAN EDU', 'H', '62784002', NULL, NULL, '2011-03-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (407, '00000061824998', 'TARIFA', 'SURCO', 'YAHIR', 'H', '61824998', NULL, NULL, '2009-06-16', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (408, '13126348200088', 'VILCAPE', 'MAMANI', 'FRANK DIEGO', 'H', '61825862', NULL, NULL, '2009-06-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (409, '12145554200028', 'ANAHUA', 'QUISPE', 'EHIDAN VICTOR', 'H', '61414103', NULL, NULL, '2008-07-26', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (410, '13022508600068', 'APAZA', 'YANARICO', 'FIORELA BRIGGITTE', 'M', '62593600', NULL, NULL, '2010-02-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (411, '13163108400138', 'CABRERA', 'MARTINEZ', 'LUJAN DEL ROCIO', 'M', '61826064', NULL, NULL, '2009-06-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (412, '00000063535839', 'CHOQUE', 'CASA', 'JUAN GABRIEL', 'H', '63535839', NULL, NULL, '2010-03-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (413, '00000061921783', 'CHOQUEMAQUE', 'COLQUE', 'MELISSA NIKOL', 'M', '61921783', NULL, NULL, '2010-03-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (414, '14022553200288', 'DAVILA', 'HUMPIRI', 'MARIANA LIZETH', 'M', '78592709', NULL, NULL, '2009-07-18', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (415, '00000061800695', 'GUILLEN', 'CCORAHUA', 'JULIO RODRIGO', 'H', '61800695', NULL, NULL, '2009-05-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (416, '00000061824969', 'HUIRMA', 'VALENCIA', 'HUGO ARMANDO', 'H', '61824969', NULL, NULL, '2009-06-03', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (417, '00000061800493', 'MAMANI', 'TITO', 'AVRIL ANYELI', 'M', '61800493', NULL, NULL, '2009-04-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (418, '14120202700018', 'MENDOZA', 'FIGUEROA', 'VALERI ALESSANDRA', 'M', '61054171', NULL, NULL, '2007-07-16', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (419, '00000061928865', 'OCHOA', 'FERNANDEZ', 'JOSE MANUEL', 'H', '61928865', NULL, NULL, '2009-12-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (420, '00000061802117', 'ORDOÑEZ', 'LABAN', 'TONNY AXEL', 'H', '61802117', NULL, NULL, '2009-06-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (421, '00000061883814', 'ORTIZ', 'TAIPE', 'YEIKO ANYELO', 'H', '61883814', NULL, NULL, '2010-02-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (422, '00000061892497', 'PACHA', 'OBANDO', 'ESTEFANY KASANDRA', 'M', '61892497', NULL, NULL, '2009-08-28', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (423, '13245632100028', 'QUISPE', 'SULLO', 'JULIO CESAR', 'H', '61574960', NULL, NULL, '2009-08-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (424, '13147851000018', 'RAYME', 'AGUILAR', 'RONY', 'H', '61708669', NULL, NULL, '2009-09-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (425, '13075005900198', 'ROQUE', 'CCORAHUA', 'GABRIEL ALEXANDER', 'H', '62562461', NULL, NULL, '2010-01-17', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (426, '00000061894606', 'SALAS', 'MEDINA', 'JOAN JOSUE', 'H', '61894606', NULL, NULL, '2009-11-29', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (427, '00000062347602', 'SIFUENTES', 'QUISPE', 'NICOLAS AUGUSTO', 'H', '62347602', NULL, NULL, '2009-12-04', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (428, '13145554200068', 'TORRES', 'HANCCO', 'DANIELA MICHELL', 'M', '62818330', NULL, NULL, '2010-02-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (429, '00000062765923', 'UNSUETA', 'SERRANO', 'FRANK DEIVIS', 'H', '62765923', NULL, NULL, '2009-10-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (430, '00000061630787', 'VALLEJO', 'CCOYLLULLI', 'FLOR ARELI', 'M', '61630787', NULL, NULL, '2009-12-16', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (431, '14145554200238', 'VERA', 'CONDORI', 'LI CAROLINA', 'M', '61938187', NULL, NULL, '2009-05-01', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (432, '14133814400028', 'YUPA', 'QUISPE', 'DAVID RICARDO JUNIOR', 'H', '61897571', NULL, NULL, '2009-10-06', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (433, '13161029400038', 'ALDUDE', 'CENTENO', 'JHOSEP FERNANDO', 'H', '61758827', NULL, NULL, '2009-05-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (434, '12133296400530', 'ANQUISE', 'YANA', 'MIGUEL ANGEL RAUL', 'H', '62562842', NULL, NULL, '2010-02-23', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (435, '00000061799346', 'ARAPA', 'TUPAC', 'ANTHONY BERNY', 'H', '61799346', NULL, NULL, '2009-05-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (436, '00000061893790', 'ARMA', 'CCALLUCHE', 'YALU ARACELY', 'M', '61893790', NULL, NULL, '2009-10-11', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (437, '00000062469641', 'ARREDONDO', 'BORDA', 'MARIA FERNANDA', 'M', '62469641', NULL, NULL, '2009-11-24', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (438, '13126348200108', 'BEDOYA', 'QUISPE', 'ANGEL YEYSON', 'H', '61459634', NULL, NULL, '2008-12-25', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (439, '13145554200098', 'CCANCHILLO', 'GUZMAN', 'ROBINHO', 'H', '61455977', NULL, NULL, '2008-09-15', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (440, '00000061968741', 'CCOTO', 'CAYANI', 'NIKOL TAYRA', 'M', '61968741', NULL, NULL, '2009-07-14', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (441, '00000061893892', 'CONDORI', 'MAMANI', 'CARLOS DANIEL', 'H', '61893892', NULL, NULL, '2009-11-13', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (442, '13126348200028', 'CUTIPA', 'CHISE', 'RICARDO MAXIMO', 'H', '62820387', NULL, NULL, '2009-05-15', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (443, '00000061847829', 'FARFAN', 'PUMA', 'MIGUEL BRANDO', 'H', '61847829', NULL, NULL, '2009-08-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (444, '00000060330186', 'FLORES', 'SOTO', 'MENLY JHONSO', 'H', '60330186', NULL, NULL, '2009-11-30', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (445, '00000061800319', 'HUAMAN', 'AMANQUI', 'TANIA CAMILA', 'M', '61800319', NULL, NULL, '2009-05-07', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (446, '13133881300118', 'IDME', 'IDME', 'ERICK SALVADOR', 'H', '62516300', NULL, NULL, '2009-08-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (447, '12145311000070', 'MAMANI', 'ARAPA', 'DAISY', 'M', '61635477', NULL, NULL, '2009-07-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (448, '00000061974414', 'MASCO', 'AYVAR', 'EVO ESTANISLAO', 'H', '61974414', NULL, NULL, '2009-11-27', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (449, '13151760200108', 'MOTTOCCANCHI', 'AYAMAMANI', 'PIERINA MIZU', 'M', '61938176', NULL, NULL, '2009-04-10', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (450, '00000061461252', 'NUÑONCA', 'FLORES', 'ROBERT ALEXANDER', 'H', '61461252', NULL, NULL, '2009-02-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (451, '13147702800108', 'PALLI', 'ENRIQUEZ', 'GEORGE RICARDO', 'H', '62352132', NULL, NULL, '2009-12-20', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (452, '00000062313012', 'PARI', 'CONDORI', 'IAN FLAVIO CESAR', 'H', '62313012', NULL, NULL, '2009-11-02', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (453, '00000062372440', 'PILA', 'QUISPE', 'MISHEYDA', 'M', '62372440', NULL, NULL, '2010-03-09', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (454, '00000061825377', 'PUMA', 'YUPANQUI', 'YOSELIN KEILA', 'M', '61825377', NULL, NULL, '2009-07-06', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (455, '00000061730564', 'SARMIENTO', 'SARMIENTO', 'SEBASTIAN OLMAR', 'H', '61730564', NULL, NULL, '2009-07-05', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (456, '00000073556401', 'TUFIÑO', 'HURTADO', 'NOEMI ESTHER', 'M', '73556401', NULL, NULL, '2009-07-19', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL),
+  (457, '00000062557422', 'YUCRA', 'VALENCIA', 'NAYSHEL CLARIBEHT', 'M', '62557422', NULL, NULL, '2010-02-22', NULL, NULL, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL)
+ON CONFLICT (dni) WHERE dni IS NOT NULL DO NOTHING;
 
--- ------------------------------------------------------------
--- 2. MATRÍCULAS 2026
--- ------------------------------------------------------------
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63153927'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81228111'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78478089'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78081538'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78292861'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78352131'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78329575'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63073431'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81196156'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78435507'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81228357'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78211766'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78511532'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78305980'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81118551'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81197024'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78440075'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78263838'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78235058'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78392718'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78153451'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81228148'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78420925'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81539952'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81539445'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78646536'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78132929'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81560158'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78218966'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81169449'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78722246'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='80931057'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78268274'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='79208199'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78051687'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81114430'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78838410'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81539484'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78096942'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81190234'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78492780'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81558691'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78221020'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81558783'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81194454'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78133506'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81540347'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90187002'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81539239'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78161153'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81558831'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78176027'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81444212'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='90276763'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='1ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81195564'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81377787'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62146335'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63244994'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63533332'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81052155'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62819420'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63535664'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81113858'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77875829'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81112330'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62958658'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81093756'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63735811'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81078343'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63429546'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63735801'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77862645'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63727904'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63727905'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81132770'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78032709'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77653181'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81063789'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81047810'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='80857111'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='80868132'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='80985895'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77824702'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77724737'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81093190'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77886247'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77879158'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81093307'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81156174'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77728816'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63232353'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63244987'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63762206'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63423127'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81094308'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77759868'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62832079'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77980612'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81094442'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='2do'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62222818'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63114715'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62939917'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63093662'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63084913'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='34292571'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63084451'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62701495'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62818924'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62960498'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62819999'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62888790'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77109365'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62831191'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63693766'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62702152'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62886488'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62858901'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62254243'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62888332'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63174354'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62259227'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63293139'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62958754'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63093666'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62810398'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63047429'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63083855'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77598280'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62231011'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62083883'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63230264'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63084478'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63084979'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='V33870371'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62985471'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62959570'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62887421'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81195532'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63795128'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77621858'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62702567'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62959817'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='058691605'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='74792828'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62886247'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62886066'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63414442'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62834588'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63135837'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63535863'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77625615'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62886988'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78359951'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63170608'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63093682'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='3ro'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62594545'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62701576'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62678747'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62583534'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62473332'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62652295'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62113144'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62551783'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61991528'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62171699'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62457907'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61816540'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62677663'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62385734'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62137341'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62702395'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62638235'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62508870'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62678773'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62740840'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62732730'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61991545'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='81093200'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='60661685'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63188702'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62516332'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='77987002'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62457644'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62741619'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='74785420'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62458461'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62756624'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62436895'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62454839'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62446091'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62361178'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62784002'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61824998'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61825862'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='4to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61414103'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62593600'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61826064'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='63535839'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61921783'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='78592709'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61800695'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61824969'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61800493'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61054171'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61928865'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61802117'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61883814'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61892497'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61574960'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61708669'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62562461'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61894606'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62347602'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62818330'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62765923'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61630787'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61938187'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61897571'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='A'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61758827'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62562842'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61799346'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61893790'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62469641'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61459634'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61455977'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61968741'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61893892'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62820387'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61847829'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='60330186'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61800319'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62516300'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61635477'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61974414'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61938176'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61461252'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62352132'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62313012'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62372440'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61825377'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='61730564'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='73556401'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
-ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
-INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula)
-SELECT e.id, g.id, s.id, a.id, '2026-03-18'
-FROM estudiantes e, niveles n, grados g, secciones s, anios_escolares a
-WHERE e.dni='62557422'
-  AND n.nombre='Secundaria' AND g.nivel_id=n.id AND g.nombre='5to'
-  AND s.grado_id=g.id AND s.nombre='B'
-  AND a.anio=2026
+SELECT setval('estudiantes_id_seq', 457);
+
+-- ============================================================
+-- MATRÍCULAS 2026
+-- ============================================================
+
+INSERT INTO matriculas
+  (id, estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula, estado_matricula, tipo_vacante)
+VALUES
+  (1, 1, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (2, 2, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (3, 3, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (4, 4, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (5, 5, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (6, 6, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (7, 7, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (8, 8, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (9, 9, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (10, 10, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (11, 11, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (12, 12, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (13, 13, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (14, 14, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (15, 15, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (16, 16, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (17, 17, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (18, 18, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (19, 19, 2, 3, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (20, 20, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (21, 21, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (22, 22, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (23, 23, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (24, 24, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (25, 25, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (26, 26, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (27, 27, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (28, 28, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (29, 29, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (30, 30, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (31, 31, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (32, 32, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (33, 33, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (34, 34, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (35, 35, 4, 6, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (36, 36, 4, 7, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (37, 37, 4, 7, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (38, 38, 4, 7, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (39, 39, 4, 7, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (40, 40, 4, 7, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (41, 41, 4, 7, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (42, 42, 4, 7, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (43, 43, 4, 7, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (44, 44, 4, 7, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (45, 45, 4, 7, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (46, 46, 4, 7, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (47, 47, 4, 7, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (48, 48, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (49, 49, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (50, 50, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (51, 51, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (52, 52, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (53, 53, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (54, 54, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (55, 55, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (56, 56, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (57, 57, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (58, 58, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (59, 59, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (60, 60, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (61, 61, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (62, 62, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (63, 63, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (64, 64, 6, 10, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (65, 65, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (66, 66, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (67, 67, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (68, 68, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (69, 69, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (70, 70, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (71, 71, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (72, 72, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (73, 73, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (74, 74, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (75, 75, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (76, 76, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (77, 77, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (78, 78, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (79, 79, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (80, 80, 6, 11, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (81, 81, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (82, 82, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (83, 83, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (84, 84, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (85, 85, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (86, 86, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (87, 87, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (88, 88, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (89, 89, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (90, 90, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (91, 91, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (92, 92, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (93, 93, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (94, 94, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (95, 95, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (96, 96, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (97, 97, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (98, 98, 1, 1, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (99, 99, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (100, 100, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (101, 101, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (102, 102, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (103, 103, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (104, 104, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (105, 105, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (106, 106, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (107, 107, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (108, 108, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (109, 109, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (110, 110, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (111, 111, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (112, 112, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (113, 113, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (114, 114, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (115, 115, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (116, 116, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (117, 117, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (118, 118, 1, 2, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (119, 119, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (120, 120, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (121, 121, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (122, 122, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (123, 123, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (124, 124, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (125, 125, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (126, 126, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (127, 127, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (128, 128, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (129, 129, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (130, 130, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (131, 131, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (132, 132, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (133, 133, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (134, 134, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (135, 135, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (136, 136, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (137, 137, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (138, 138, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (139, 139, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (140, 140, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (141, 141, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (142, 142, 3, 4, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (143, 143, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (144, 144, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (145, 145, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (146, 146, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (147, 147, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (148, 148, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (149, 149, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (150, 150, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (151, 151, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (152, 152, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (153, 153, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (154, 154, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (155, 155, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (156, 156, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (157, 157, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (158, 158, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (159, 159, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (160, 160, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (161, 161, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (162, 162, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (163, 163, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (164, 164, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (165, 165, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (166, 166, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (167, 167, 3, 5, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (168, 168, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (169, 169, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (170, 170, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (171, 171, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (172, 172, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (173, 173, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (174, 174, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (175, 175, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (176, 176, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (177, 177, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (178, 178, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (179, 179, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (180, 180, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (181, 181, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (182, 182, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (183, 183, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (184, 184, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (185, 185, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (186, 186, 5, 8, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (187, 187, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (188, 188, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (189, 189, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (190, 190, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (191, 191, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (192, 192, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (193, 193, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (194, 194, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (195, 195, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (196, 196, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (197, 197, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (198, 198, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (199, 199, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (200, 200, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (201, 201, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (202, 202, 5, 9, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (203, 203, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (204, 204, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (205, 205, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (206, 206, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (207, 207, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (208, 208, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (209, 209, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (210, 210, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (211, 211, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (212, 212, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (213, 213, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (214, 214, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (215, 215, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (216, 216, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (217, 217, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (218, 218, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (219, 219, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (220, 220, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (221, 221, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (222, 222, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (223, 223, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (224, 224, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (225, 225, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (226, 226, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (227, 227, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (228, 228, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (229, 229, 8, 14, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (230, 230, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (231, 231, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (232, 232, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (233, 233, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (234, 234, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (235, 235, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (236, 236, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (237, 237, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (238, 238, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (239, 239, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (240, 240, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (241, 241, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (242, 242, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (243, 243, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (244, 244, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (245, 245, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (246, 246, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (247, 247, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (248, 248, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (249, 249, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (250, 250, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (251, 251, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (252, 252, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (253, 253, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (254, 254, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (255, 255, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (256, 256, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (257, 257, 8, 15, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (258, 258, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (259, 259, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (260, 260, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (261, 261, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (262, 262, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (263, 263, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (264, 264, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (265, 265, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (266, 266, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (267, 267, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (268, 268, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (269, 269, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (270, 270, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (271, 271, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (272, 272, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (273, 273, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (274, 274, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (275, 275, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (276, 276, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (277, 277, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (278, 278, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (279, 279, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (280, 280, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (281, 281, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (282, 282, 10, 18, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (283, 283, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (284, 284, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (285, 285, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (286, 286, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (287, 287, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (288, 288, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (289, 289, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (290, 290, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (291, 291, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (292, 292, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (293, 293, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (294, 294, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (295, 295, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (296, 296, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (297, 297, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (298, 298, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (299, 299, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (300, 300, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (301, 301, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (302, 302, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (303, 303, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (304, 304, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (305, 305, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (306, 306, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (307, 307, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (308, 308, 10, 19, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (309, 309, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (310, 310, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (311, 311, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (312, 312, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (313, 313, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (314, 314, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (315, 315, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (316, 316, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (317, 317, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (318, 318, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (319, 319, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (320, 320, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (321, 321, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (322, 322, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (323, 323, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (324, 324, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (325, 325, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (326, 326, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (327, 327, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (328, 328, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (329, 329, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (330, 330, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (331, 331, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (332, 332, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (333, 333, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (334, 334, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (335, 335, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (336, 336, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (337, 337, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (338, 338, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (339, 339, 11, 20, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (340, 340, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (341, 341, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (342, 342, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (343, 343, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (344, 344, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (345, 345, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (346, 346, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (347, 347, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (348, 348, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (349, 349, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (350, 350, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (351, 351, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (352, 352, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (353, 353, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (354, 354, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (355, 355, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (356, 356, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (357, 357, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (358, 358, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (359, 359, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (360, 360, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (361, 361, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (362, 362, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (363, 363, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (364, 364, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (365, 365, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (366, 366, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (367, 367, 11, 21, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (368, 368, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (369, 369, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (370, 370, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (371, 371, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (372, 372, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (373, 373, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (374, 374, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (375, 375, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (376, 376, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (377, 377, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (378, 378, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (379, 379, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (380, 380, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (381, 381, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (382, 382, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (383, 383, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (384, 384, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (385, 385, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (386, 386, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (387, 387, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (388, 388, 7, 12, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (389, 389, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (390, 390, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (391, 391, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (392, 392, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (393, 393, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (394, 394, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (395, 395, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (396, 396, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (397, 397, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (398, 398, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (399, 399, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (400, 400, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (401, 401, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (402, 402, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (403, 403, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (404, 404, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (405, 405, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (406, 406, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (407, 407, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (408, 408, 7, 13, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (409, 409, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (410, 410, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (411, 411, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (412, 412, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (413, 413, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (414, 414, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (415, 415, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (416, 416, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (417, 417, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (418, 418, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (419, 419, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (420, 420, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (421, 421, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (422, 422, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (423, 423, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (424, 424, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (425, 425, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (426, 426, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (427, 427, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (428, 428, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (429, 429, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (430, 430, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (431, 431, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (432, 432, 9, 16, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (433, 433, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (434, 434, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (435, 435, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (436, 436, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (437, 437, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (438, 438, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (439, 439, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (440, 440, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (441, 441, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (442, 442, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (443, 443, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (444, 444, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (445, 445, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (446, 446, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (447, 447, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (448, 448, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (449, 449, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (450, 450, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (451, 451, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (452, 452, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (453, 453, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (454, 454, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (455, 455, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (456, 456, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL),
+  (457, 457, 9, 17, 1, CURRENT_DATE, 'DEFINITIVA', NULL)
 ON CONFLICT (estudiante_id, anio_id) DO NOTHING;
 
--- ------------------------------------------------------------
--- 3. VERIFICAR
--- ------------------------------------------------------------
-SELECT
-  e.apellido_paterno || ' ' || e.apellido_materno AS apellidos,
-  e.nombres, n.nombre AS nivel, g.nombre AS grado, s.nombre AS seccion, a.anio
-FROM matriculas m
-JOIN estudiantes e ON e.id=m.estudiante_id
-JOIN grados g ON g.id=m.grado_id
-JOIN niveles n ON n.id=g.nivel_id
-JOIN secciones s ON s.id=m.seccion_id
-JOIN anios_escolares a ON a.id=m.anio_id
-WHERE n.nombre='Secundaria'
-ORDER BY g.nombre, s.nombre, e.apellido_paterno;
-
+SELECT setval('matriculas_id_seq', 457);

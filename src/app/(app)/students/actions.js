@@ -47,12 +47,14 @@ export async function fetchStudentsData(filters) {
 
   // Analizar cada estudiante para graduacion
   const data = await Promise.all(dataRes.rows.map(async (st) => {
-    // Buscar si tiene matricula para evaluar logica de promocion
+    // Buscar si tiene matricula para evaluar logica de promocion y obtener datos completos
     const mRes = await query(`
-      SELECT g.nombre as grado_nombre, n.nombre as nivel_nombre
+      SELECT g.nombre as grado_nombre, n.nombre as nivel_nombre, s.nombre as seccion_nombre, a.anio, m.estado_matricula, m.tipo_vacante
       FROM matriculas m
       JOIN grados g ON m.grado_id = g.id
       JOIN niveles n ON g.nivel_id = n.id
+      LEFT JOIN secciones s ON m.seccion_id = s.id
+      LEFT JOIN anios_escolares a ON m.anio_id = a.id
       WHERE m.estudiante_id = $1
       ORDER BY m.id DESC LIMIT 1
     `, [st.id]);
@@ -60,10 +62,21 @@ export async function fetchStudentsData(filters) {
     let canGraduate = false;
     let canPassToSecondary = false;
     let gradoActual = '';
+    let seccionActual = '';
+    let gradoNombre = '';
+    let anioActual = '';
+    let estado_matricula = '';
+    let tipo_vacante = '';
 
     if (mRes.rows.length > 0) {
       const m = mRes.rows[0];
       gradoActual = `${m.grado_nombre} de ${m.nivel_nombre}`;
+      seccionActual = m.seccion_nombre || 'No asignada';
+      gradoNombre = m.grado_nombre;
+      anioActual = m.anio;
+      estado_matricula = m.estado_matricula;
+      tipo_vacante = m.tipo_vacante;
+
       const nivel = m.nivel_nombre.toLowerCase();
       const grado = m.grado_nombre.toLowerCase();
       
@@ -74,7 +87,7 @@ export async function fetchStudentsData(filters) {
       if (is6toPrimaria) canPassToSecondary = true;
     }
 
-    return { ...st, canGraduate, canPassToSecondary, gradoActual };
+    return { ...st, canGraduate, canPassToSecondary, gradoActual, seccionActual, gradoNombre, anioActual, estado_matricula, tipo_vacante };
   }));
 
   return {
@@ -92,8 +105,9 @@ export async function fetchStudentsData(filters) {
 }
 
 export async function getFilterOptions() {
+  const currentYear = new Date().getFullYear();
   const [anios, niveles, grados, secciones] = await Promise.all([
-    query('SELECT * FROM anios_escolares ORDER BY anio DESC'),
+    query('SELECT * FROM anios_escolares WHERE anio <= $1 ORDER BY anio DESC', [currentYear]),
     query('SELECT * FROM niveles ORDER BY id ASC'),
     query('SELECT * FROM grados ORDER BY id ASC'),
     query('SELECT * FROM secciones ORDER BY id ASC')
@@ -119,22 +133,26 @@ export async function toggleEgresadoStatus(id, status) {
 
 export async function saveStudent(data) {
   const {
-    id, apellido_paterno, apellido_materno, nombres, dni, celular, email,
+    id, codigo_estudiante, apellido_paterno, apellido_materno, nombres, sexo, dni, celular, email,
     fecha_nacimiento, departamento_nacimiento, provincia_nacimiento,
     distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
     padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular
   } = data;
 
+  const validDni = dni && dni.trim() !== '' ? dni.trim() : null;
+  const validCodigo = codigo_estudiante && codigo_estudiante.trim() !== '' ? codigo_estudiante.trim() : null;
+  const validSexo = sexo === 'H' || sexo === 'M' ? sexo : null;
+
   if (id) {
     await query(`
       UPDATE estudiantes SET 
-        apellido_paterno=$1, apellido_materno=$2, nombres=$3, dni=$4, celular=$5, email=$6,
-        fecha_nacimiento=$7, departamento_nacimiento=$8, provincia_nacimiento=$9,
-        distrito_nacimiento=$10, domicilio=$11, reporte=$12, padre_dni=$13, padre_nombres=$14,
-        padre_apellidos=$15, padre_celular=$16, madre_dni=$17, madre_nombres=$18, madre_apellidos=$19, madre_celular=$20
-      WHERE id=$21
+        codigo_estudiante=$1, apellido_paterno=$2, apellido_materno=$3, nombres=$4, sexo=$5, dni=$6, celular=$7, email=$8,
+        fecha_nacimiento=$9, departamento_nacimiento=$10, provincia_nacimiento=$11,
+        distrito_nacimiento=$12, domicilio=$13, reporte=$14, padre_dni=$15, padre_nombres=$16,
+        padre_apellidos=$17, padre_celular=$18, madre_dni=$19, madre_nombres=$20, madre_apellidos=$21, madre_celular=$22
+      WHERE id=$23
     `, [
-      apellido_paterno, apellido_materno, nombres, dni, celular, email,
+      validCodigo, apellido_paterno, apellido_materno, nombres, validSexo, validDni, celular, email,
       fecha_nacimiento || null, departamento_nacimiento, provincia_nacimiento,
       distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
       padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular, id
@@ -142,15 +160,15 @@ export async function saveStudent(data) {
   } else {
     await query(`
       INSERT INTO estudiantes (
-        apellido_paterno, apellido_materno, nombres, dni, celular, email,
+        codigo_estudiante, apellido_paterno, apellido_materno, nombres, sexo, dni, celular, email,
         fecha_nacimiento, departamento_nacimiento, provincia_nacimiento,
         distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
         padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
       )
     `, [
-      apellido_paterno, apellido_materno, nombres, dni, celular, email,
+      validCodigo, apellido_paterno, apellido_materno, nombres, validSexo, validDni, celular, email,
       fecha_nacimiento || null, departamento_nacimiento, provincia_nacimiento,
       distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
       padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular
@@ -164,5 +182,37 @@ export async function saveStudent(data) {
 export async function deleteStudent(id) {
   await query('DELETE FROM estudiantes WHERE id = $1', [id]);
   revalidatePath('/students');
+  return { success: true };
+}
+
+export async function bulkEnrollStudents(studentIds, anio_id, grado_id, seccion_id) {
+  if (!studentIds || !studentIds.length) throw new Error('No hay estudiantes seleccionados');
+  if (!anio_id || !grado_id || !seccion_id) throw new Error('Faltan datos de la matrícula (Año, Grado o Sección)');
+
+  for (let id of studentIds) {
+    // Evitar duplicados
+    const exists = await query('SELECT id FROM matriculas WHERE estudiante_id = $1 AND anio_id = $2', [id, anio_id]);
+    if (exists.rows.length === 0) {
+      // Intentar matricular, si algún trigger falla (ej. restricción entre nivel y grado), paramos o seguimos
+      try {
+        await query(`
+          INSERT INTO matriculas (estudiante_id, anio_id, grado_id, seccion_id, fecha_matricula) 
+          VALUES ($1, $2, $3, $4, CURRENT_DATE)
+        `, [id, anio_id, grado_id, seccion_id]);
+      } catch (err) {
+        throw new Error(`Error al matricular estudiante ID ${id}: ${err.message}`);
+      }
+    } else {
+      // Si ya está matriculado en este año, podríamos actualizarle su matrícula actual en lugar de saltarlo.
+      // O simplemente actualizarlo. Actualizamos:
+      await query(`
+        UPDATE matriculas SET grado_id = $1, seccion_id = $2, fecha_matricula = CURRENT_DATE
+        WHERE estudiante_id = $3 AND anio_id = $4
+      `, [grado_id, seccion_id, id, anio_id]);
+    }
+  }
+
+  revalidatePath('/students');
+  revalidatePath('/enrollments');
   return { success: true };
 }

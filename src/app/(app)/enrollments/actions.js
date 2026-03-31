@@ -20,13 +20,13 @@ export async function getEnrollments() {
 }
 
 export async function getActiveYear() {
-  // En Laravel, el año activo se pasaba automáticamente. Retornamos el último.
-  const res = await query('SELECT * FROM anios_escolares ORDER BY anio DESC LIMIT 1');
+  const currentYear = new Date().getFullYear();
+  // En Laravel, el año activo se pasaba automáticamente. Retornamos el último hasta el año actual.
+  const res = await query('SELECT * FROM anios_escolares WHERE anio <= $1 ORDER BY anio DESC LIMIT 1', [currentYear]);
   if(!res.rows[0]) {
-    // Si no hay año escolar lo creamos (2026 por defecto por ejemplo)
-    const yearConfig = new Date().getFullYear();
-    const inserted = await query('INSERT INTO anios_escolares (anio) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *', [yearConfig]);
-    const secondFetch = await query('SELECT * FROM anios_escolares ORDER BY anio DESC LIMIT 1');
+    // Si no hay año escolar lo creamos (año actual por defecto)
+    const inserted = await query('INSERT INTO anios_escolares (anio) VALUES ($1) ON CONFLICT DO NOTHING RETURNING *', [currentYear]);
+    const secondFetch = await query('SELECT * FROM anios_escolares WHERE anio <= $1 ORDER BY anio DESC LIMIT 1', [currentYear]);
     return secondFetch.rows[0];
   }
   return res.rows[0];

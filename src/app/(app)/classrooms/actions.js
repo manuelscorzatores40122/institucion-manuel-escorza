@@ -3,7 +3,8 @@
 import { query } from '@/lib/db';
 
 export async function getActiveYear() {
-  const res = await query('SELECT * FROM anios_escolares ORDER BY anio DESC LIMIT 1');
+  const currentYear = new Date().getFullYear();
+  const res = await query('SELECT * FROM anios_escolares WHERE anio <= $1 ORDER BY anio DESC LIMIT 1', [currentYear]);
   return res.rows[0];
 }
 

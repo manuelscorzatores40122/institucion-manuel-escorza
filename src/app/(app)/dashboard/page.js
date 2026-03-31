@@ -3,15 +3,38 @@ import Link from 'next/link';
 import { cookies } from 'next/headers';
 
 async function getStats() {
-  const [est, apo, mat] = await Promise.all([
+  const [est, apo, mat, nivelesStats] = await Promise.all([
     query('SELECT COUNT(*) FROM estudiantes'),
     query('SELECT COUNT(*) FROM apoderados'),
     query('SELECT COUNT(*) FROM matriculas'),
+    query(`
+      SELECT n.nombre, COUNT(m.id) as count
+      FROM matriculas m
+      JOIN grados g ON m.grado_id = g.id
+      JOIN niveles n ON g.nivel_id = n.id
+      GROUP BY n.nombre
+    `)
   ]);
+
+  let primCount = 0;
+  let secCount = 0;
+  nivelesStats.rows.forEach(row => {
+    if (row.nombre.toLowerCase() === 'primaria') primCount = parseInt(row.count, 10);
+    if (row.nombre.toLowerCase() === 'secundaria') secCount = parseInt(row.count, 10);
+  });
+
+  const totalM = parseInt(mat.rows[0].count, 10) || 1;
+  const primPerc = Math.round((primCount / totalM) * 100) || 0;
+  const secPerc = Math.round((secCount / totalM) * 100) || 0;
+
   return {
     estudiantes: est.rows[0].count,
     apoderados: apo.rows[0].count,
-    matriculas: mat.rows[0].count,
+    matriculas: parseInt(mat.rows[0].count, 10),
+    primaria_perc: primPerc,
+    secundaria_perc: secPerc,
+    primaria_count: primCount,
+    secundaria_count: secCount
   };
 }
 
@@ -23,7 +46,7 @@ async function getUser() {
     const { jwtVerify } = await import('jose');
     const secret = new TextEncoder().encode(process.env.JWT_SECRET);
     const { payload } = await jwtVerify(token, secret);
-    return payload; 
+    return payload;
   } catch (error) {
     return null;
   }
@@ -40,7 +63,7 @@ export default async function DashboardPage() {
         <p className="text-muted">Resumen general académico y administrativo.</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-4 gap-3 mb-4">
         {/* Stat Card 1 */}
         <div className="stat-card" style={{ borderLeftColor: 'var(--primary)' }}>
           <div>
@@ -82,6 +105,31 @@ export default async function DashboardPage() {
             <i className='bx bx-clipboard'></i>
           </div>
         </div>
+
+        {/* Stat Card 4 */}
+        <div className="stat-card" style={{ borderLeftColor: '#8b5cf6' }}>
+          <div style={{ width: '100%' }}>
+            <div className="stat-card-title">Distribución por Nivel</div>
+
+            <div style={{ marginTop: '0.8rem', fontSize: '0.85rem', color: '#64748b' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span>Primaria ({stats.primaria_count})</span>
+                <span style={{ fontWeight: '600', color: '#6366f1' }}>{stats.primaria_perc}%</span>
+              </div>
+              <div style={{ width: '100%', height: '5px', background: '#e2e8f0', borderRadius: '3px', marginBottom: '10px' }}>
+                <div style={{ width: `${stats.primaria_perc}%`, height: '100%', background: '#6366f1', borderRadius: '3px' }}></div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span>Secundaria ({stats.secundaria_count})</span>
+                <span style={{ fontWeight: '600', color: '#8b5cf6' }}>{stats.secundaria_perc}%</span>
+              </div>
+              <div style={{ width: '100%', height: '5px', background: '#e2e8f0', borderRadius: '3px' }}>
+                <div style={{ width: `${stats.secundaria_perc}%`, height: '100%', background: '#8b5cf6', borderRadius: '3px' }}></div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mt-4">
@@ -98,7 +146,7 @@ export default async function DashboardPage() {
             </Link>
           </div>
         </div>
-        
+
         <div className="card" style={{ marginBottom: '0' }}>
           <h3 style={{ fontSize: '1.15rem', marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem' }}>
             <i className='bx bx-info-circle text-primary'></i> Sistema y Accesos
@@ -106,7 +154,7 @@ export default async function DashboardPage() {
           <p className="text-muted" style={{ fontSize: '0.9rem' }}>
             Has iniciado sesión de forma autorizada. Recuerda cerrar sesión al finalizar y no compartir tus credenciales de administrador.
           </p>
-          
+
           {user?.nombre_usuario === 'admin' && (
             <div style={{ marginTop: '1.5rem' }}>
               <Link href="/users" className="btn btn-outline" style={{ border: '1px solid var(--border-color)', color: 'var(--text-color)', background: '#f8fafc', fontSize: '0.85rem' }}>

@@ -14,3 +14,16 @@ export async function deleteUser(id) {
   revalidatePath('/users');
   return { success: true };
 }
+
+export async function saveUser(nombre_usuario, contrasena) {
+  if (!nombre_usuario || !contrasena) throw new Error('Usuario y constraseña obligatorios');
+  const bcrypt = await import('bcryptjs');
+  const hash = bcrypt.hashSync(contrasena, 10);
+  try {
+    await query('INSERT INTO usuarios (nombre_usuario, contrasena) VALUES ($1, $2)', [nombre_usuario, hash]);
+    revalidatePath('/users');
+    return { success: true };
+  } catch (err) {
+    throw new Error('El nombre de usuario ya existe o hubo un error');
+  }
+}

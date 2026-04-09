@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { getLevels, getGradesByLevel, getSectionsByGrade, saveEnrollment } from '../actions';
+import { getLevels, getGradesByLevel, saveEnrollment } from '../actions';
 import { searchStudentByDni } from '../../students/actions';
 import AlertModal from '../../AlertModal';
 
@@ -14,12 +14,10 @@ export default function CreateEnrollmentClient({ activeYear, levels }) {
     estudiante_id: '',
     nivel_id: '',
     grado_id: '',
-    seccion_id: '',
     anio_id: activeYear?.id || ''
   });
 
   const [grades, setGrades] = useState([]);
-  const [sections, setSections] = useState([]);
   
   const [searchUrl, setSearchUrl] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -52,8 +50,7 @@ export default function CreateEnrollmentClient({ activeYear, levels }) {
 
   const handleLevelChange = async (e) => {
     const nivelId = e.target.value;
-    setFormData({ ...formData, nivel_id: nivelId, grado_id: '', seccion_id: '' });
-    setSections([]);
+    setFormData({ ...formData, nivel_id: nivelId, grado_id: '' });
     if (nivelId) {
       const gs = await getGradesByLevel(nivelId);
       setGrades(gs);
@@ -64,17 +61,7 @@ export default function CreateEnrollmentClient({ activeYear, levels }) {
 
   const handleGradeChange = async (e) => {
     const gradoId = e.target.value;
-    setFormData({ ...formData, grado_id: gradoId, seccion_id: '' });
-    if (gradoId) {
-      const sc = await getSectionsByGrade(gradoId);
-      setSections(sc);
-    } else {
-      setSections([]);
-    }
-  };
-
-  const handleSectionChange = (e) => {
-    setFormData({ ...formData, seccion_id: e.target.value });
+    setFormData({ ...formData, grado_id: gradoId });
   };
 
   const handleSubmit = async (e) => {
@@ -170,14 +157,6 @@ export default function CreateEnrollmentClient({ activeYear, levels }) {
             <select className="form-control" name="grado_id" required disabled={grades.length === 0} value={formData.grado_id} onChange={handleGradeChange}>
               <option value="" disabled>Primero seleccione nivel...</option>
               {grades.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-            </select>
-          </div>
-
-          <div className="form-group">
-            <label className="form-label" htmlFor="seccion_id">Sección</label>
-            <select className="form-control" name="seccion_id" required disabled={sections.length === 0} value={formData.seccion_id} onChange={handleSectionChange}>
-              <option value="" disabled>Primero seleccione grado...</option>
-              {sections.map(s => <option key={s.id} value={s.id}>"{s.nombre}"</option>)}
             </select>
           </div>
         </div>

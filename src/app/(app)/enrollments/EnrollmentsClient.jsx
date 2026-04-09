@@ -35,7 +35,7 @@ export default function EnrollmentsClient({ initialData }) {
             <th style={{ padding: '10px' }}>Fecha</th>
             <th style={{ padding: '10px' }}>Estudiante</th>
             <th style={{ padding: '10px' }}>Año</th>
-            <th style={{ padding: '10px' }}>Aula</th>
+            <th style={{ padding: '10px' }}>Grado / Nivel</th>
             <th style={{ padding: '10px' }}>Acciones</th>
           </tr>
         </thead>
@@ -50,7 +50,7 @@ export default function EnrollmentsClient({ initialData }) {
                 <td style={{ padding: '10px' }}>{item.fecha_matricula ? new Date(item.fecha_matricula).toISOString().split('T')[0] : '-'}</td>
                 <td style={{ padding: '10px' }}>{item.dni} - {item.apellido_paterno} {item.apellido_materno}, {item.nombres}</td>
                 <td style={{ padding: '10px' }}>{item.anio}</td>
-                <td style={{ padding: '10px' }}>{item.nivel} {item.grado} "{item.seccion}"</td>
+                <td style={{ padding: '10px' }}>{item.nivel} {item.grado}</td>
                 <td style={{ padding: '10px' }}>
                   <button className="btn btn-danger btn-sm" style={{ background: '#dc2626', color: 'white' }} onClick={() => handleDelete(item.id)}>
                     Cancelar Matrícula

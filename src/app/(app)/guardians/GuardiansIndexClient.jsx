@@ -43,7 +43,7 @@ export default function GuardiansIndexClient() {
       onConfirm: async () => {
         setConfirmConfig({ isOpen: false });
         await deleteGuardian(id);
-        loadData(filters);
+        loadData(filters); ww
       },
       onCancel: () => setConfirmConfig({ isOpen: false })
     });

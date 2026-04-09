@@ -7,10 +7,9 @@ export async function getEnrollments() {
   try {
     const q = `
       SELECT m.id, m.fecha_matricula, e.dni, e.nombres, e.apellido_paterno, e.apellido_materno,
-             s.nombre as seccion, g.nombre as grado, n.nombre as nivel, a.anio
+             g.nombre as grado, n.nombre as nivel, a.anio
       FROM matriculas m
       JOIN estudiantes e ON m.estudiante_id = e.id
-      JOIN secciones s ON m.seccion_id = s.id
       JOIN grados g ON m.grado_id = g.id
       JOIN niveles n ON g.nivel_id = n.id
       JOIN anios_escolares a ON m.anio_id = a.id
@@ -60,18 +59,8 @@ export async function getGradesByLevel(nivelId) {
   }
 }
 
-export async function getSectionsByGrade(gradoId) {
-  try {
-    const res = await query('SELECT * FROM secciones WHERE grado_id = $1 ORDER BY id ASC', [gradoId]);
-    return res.rows;
-  } catch (error) {
-    console.error('Error al obtener secciones:', error);
-    return [];
-  }
-}
-
 export async function saveEnrollment(data) {
-  const { estudiante_id, anio_id, grado_id, seccion_id } = data;
+  const { estudiante_id, anio_id, grado_id } = data;
   
   // Validar si la matrícula ya existe
   const exists = await query('SELECT id FROM matriculas WHERE estudiante_id = $1 AND anio_id = $2', [estudiante_id, anio_id]);
@@ -80,9 +69,9 @@ export async function saveEnrollment(data) {
   }
 
   await query(`
-    INSERT INTO matriculas (estudiante_id, anio_id, grado_id, seccion_id, fecha_matricula) 
-    VALUES ($1, $2, $3, $4, CURRENT_DATE)
-  `, [estudiante_id, anio_id, grado_id, seccion_id]);
+    INSERT INTO matriculas (estudiante_id, anio_id, grado_id, fecha_matricula) 
+    VALUES ($1, $2, $3, CURRENT_DATE)
+  `, [estudiante_id, anio_id, grado_id]);
 
   revalidatePath('/enrollments');
   return { success: true };

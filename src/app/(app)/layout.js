@@ -44,9 +44,6 @@ export default async function DashboardLayout({ children }) {
           <Link href="/enrollments" className="nav-item">
             <i className='bx bx-clipboard'></i> Matrículas
           </Link>
-          <Link href="/classrooms" className="nav-item">
-            <i className='bx bxs-chalkboard'></i> Aulas / Secciones
-          </Link>
           {user.nombre_usuario === 'admin' && (
             <Link href="/users" className="nav-item">
               <i className='bx bxs-user-account'></i> Usuarios

@@ -17,18 +17,17 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
-  const [bulkForm, setBulkForm] = useState({ anio_id: '', nivel_id: '', grado_id: '', seccion_id: '' });
+  const [bulkForm, setBulkForm] = useState({ anio_id: '', nivel_id: '', grado_id: '' });
   const [filters, setFilters] = useState({
     search: '',
     egresados: '0',
     anio_id: '',
     nivel_id: '',
     grado_id: '',
-    seccion_id: '',
     page: 1
   });
 
-  const { anios, niveles, grados, secciones } = initialFiltersParams;
+  const { anios, niveles, grados } = initialFiltersParams;
 
   useEffect(() => {
     let debounceTimer = setTimeout(() => {
@@ -46,8 +45,8 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'nivel_id') setFilters(p => ({ ...p, nivel_id: value, grado_id: '', seccion_id: '', page: 1 }));
-    else if (name === 'grado_id') setFilters(p => ({ ...p, grado_id: value, seccion_id: '', page: 1 }));
+    if (name === 'nivel_id') setFilters(p => ({ ...p, nivel_id: value, grado_id: '', page: 1 }));
+    else if (name === 'grado_id') setFilters(p => ({ ...p, grado_id: value, page: 1 }));
     else setFilters(p => ({ ...p, [name]: value, page: 1 }));
   };
 
@@ -110,14 +109,14 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
 
   const handleBulkEnroll = async (e) => {
     e.preventDefault();
-    if (!bulkForm.anio_id || !bulkForm.grado_id || !bulkForm.seccion_id) {
+    if (!bulkForm.anio_id || !bulkForm.grado_id) {
       alert("Faltan datos requeridos");
       return;
     }
     setLoading(true);
     setBulkModalOpen(false);
     try {
-      await bulkEnrollStudents(selectedIds, bulkForm.anio_id, bulkForm.grado_id, bulkForm.seccion_id);
+      await bulkEnrollStudents(selectedIds, bulkForm.anio_id, bulkForm.grado_id);
       setSelectedIds([]);
       loadData(filters);
     } catch (err) {
@@ -140,10 +139,6 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
     if (filters.grado_id) {
       const g = grados?.find(x => x.id == filters.grado_id);
       if (g) title += ` - ${g.nombre}`;
-    }
-    if (filters.seccion_id) {
-      const s = secciones?.find(x => x.id == filters.seccion_id);
-      if (s) title += ` Seccion "${s.nombre}"`;
     }
     return title;
   };
@@ -217,8 +212,8 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
       </div>
 
       <div className="filters-container mb-4 p-3" style={{ background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', padding: '1rem' }}>
-        <form id="filterForm" className="grid grid-cols-1 md-grid-cols-4 gap-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '1rem' }}>
-          <div className="form-group mb-0" style={{ gridColumn: 'span 4' }}>
+        <form id="filterForm" className="grid grid-cols-1 md-grid-cols-3 gap-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1rem' }}>
+          <div className="form-group mb-0" style={{ gridColumn: 'span 3' }}>
             <label className="form-label"><i className='bx bx-search'></i> Búsqueda por texto</label>
             <input type="text" name="search" className="form-control" placeholder="Buscar por DNI, Nombres, Apellidos" value={filters.search} onChange={handleFilterChange} autoComplete="off" />
           </div>
@@ -236,22 +231,6 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
             <select name="nivel_id" className="form-control" value={filters.nivel_id} onChange={handleFilterChange}>
               <option value="">Todos los niveles</option>
               {niveles?.map(n => <option key={n.id} value={n.id}>{n.nombre}</option>)}
-            </select>
-          </div>
-
-          <div className="form-group mb-0">
-            <label className="form-label">Grado</label>
-            <select name="grado_id" className="form-control" value={filters.grado_id} onChange={handleFilterChange} disabled={!filters.nivel_id}>
-              <option value="">{filters.nivel_id ? 'Todos los grados' : 'Selecciona un nivel'}</option>
-              {grados?.filter(g => g.nivel_id == filters.nivel_id).map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-            </select>
-          </div>
-
-          <div className="form-group mb-0">
-            <label className="form-label">Sección</label>
-            <select name="seccion_id" className="form-control" value={filters.seccion_id} onChange={handleFilterChange} disabled={!filters.grado_id}>
-              <option value="">{filters.grado_id ? 'Todas las secc' : 'Selecciona grado'}</option>
-              {secciones?.filter(s => s.grado_id == filters.grado_id).map(s => <option key={s.id} value={s.id}>"{s.nombre}"</option>)}
             </select>
           </div>
         </form>
@@ -407,7 +386,6 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
                 <div><span style={{ color: '#64748b' }}>Sexo:</span> {selectedStudent.sexo === 'H' ? 'Masculino' : selectedStudent.sexo === 'M' ? 'Femenino' : 'No registrado'}</div>
                 <div><span style={{ color: '#64748b' }}>Año Curricular:</span> {selectedStudent.anioActual || 'No registrado'}</div>
                 <div><span style={{ color: '#64748b' }}>Grado:</span> {selectedStudent.gradoNombre || 'No asignado'}</div>
-                <div><span style={{ color: '#64748b' }}>Sección:</span> {selectedStudent.seccionActual || 'N/A'}</div>
                 <div><span style={{ color: '#64748b' }}>Est. Matrícula:</span> {selectedStudent.estado_matricula || 'No registrada'}</div>
                 <div><span style={{ color: '#64748b' }}>Tipo Vacante:</span> {selectedStudent.tipo_vacante || 'No especificado'}</div>
                 <div><span style={{ color: '#64748b' }}>Celular:</span> {selectedStudent.celular || 'No registrado'}</div>
@@ -453,23 +431,16 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
               </div>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Nivel destino</label>
-                <select className="form-control" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} value={bulkForm.nivel_id} onChange={e => setBulkForm({ ...bulkForm, nivel_id: e.target.value, grado_id: '', seccion_id: '' })} required>
+                <select className="form-control" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} value={bulkForm.nivel_id} onChange={e => setBulkForm({ ...bulkForm, nivel_id: e.target.value, grado_id: '' })} required>
                   <option value="">Selecciona nivel...</option>
                   {niveles?.map(n => <option key={n.id} value={n.id}>{n.nombre}</option>)}
                 </select>
               </div>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Grado destino</label>
-                <select className="form-control" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} value={bulkForm.grado_id} onChange={e => setBulkForm({ ...bulkForm, grado_id: e.target.value, seccion_id: '' })} required disabled={!bulkForm.nivel_id}>
+                <select className="form-control" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} value={bulkForm.grado_id} onChange={e => setBulkForm({ ...bulkForm, grado_id: e.target.value })} required disabled={!bulkForm.nivel_id}>
                   <option value="">Selecciona grado...</option>
                   {grados?.filter(g => g.nivel_id == bulkForm.nivel_id).map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
-                </select>
-              </div>
-              <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Sección destino</label>
-                <select className="form-control" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} value={bulkForm.seccion_id} onChange={e => setBulkForm({ ...bulkForm, seccion_id: e.target.value })} required disabled={!bulkForm.grado_id}>
-                  <option value="">Selecciona sección...</option>
-                  {secciones?.filter(s => s.grado_id == bulkForm.grado_id).map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
               </div>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '1rem' }}>

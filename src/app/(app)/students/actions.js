@@ -4,7 +4,7 @@ import { query } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
 
 export async function fetchStudentsData(filters) {
-  const { search, egresados, anio_id, nivel_id, grado_id, seccion_id, page = 1 } = filters;
+  const { search, egresados, anio_id, nivel_id, grado_id, page = 1 } = filters;
   const limit = 10;
   const offset = (page - 1) * limit;
 
@@ -23,10 +23,10 @@ export async function fetchStudentsData(filters) {
     paramIndex++;
   }
 
-  // To support anio_id, nivel_id, grado_id, seccion_id we would JOIN with matriculas
-  if (anio_id || nivel_id || grado_id || seccion_id) {
+  // To support anio_id, nivel_id, grado_id we would JOIN with matriculas
+  if (anio_id || nivel_id || grado_id) {
     baseQuery += ` AND id IN (SELECT estudiante_id FROM matriculas m`;
-    if (nivel_id && !grado_id && !seccion_id) {
+    if (nivel_id && !grado_id) {
        // Si filtra nivel pero no grado, requerimos JOIN con grados para encontrar el nivel
        baseQuery += ` JOIN grados g ON m.grado_id = g.id WHERE 1=1`;
     } else {
@@ -34,9 +34,8 @@ export async function fetchStudentsData(filters) {
     }
     
     if (anio_id) { baseQuery += ` AND m.anio_id = $${paramIndex++}`; queryParams.push(anio_id); }
-    if (nivel_id && !grado_id && !seccion_id) { baseQuery += ` AND g.nivel_id = $${paramIndex++}`; queryParams.push(nivel_id); }
+    if (nivel_id && !grado_id) { baseQuery += ` AND g.nivel_id = $${paramIndex++}`; queryParams.push(nivel_id); }
     if (grado_id) { baseQuery += ` AND m.grado_id = $${paramIndex++}`; queryParams.push(grado_id); }
-    if (seccion_id) { baseQuery += ` AND m.seccion_id = $${paramIndex++}`; queryParams.push(seccion_id); }
     baseQuery += `)`;
   }
 
@@ -51,11 +50,10 @@ export async function fetchStudentsData(filters) {
   const data = await Promise.all(dataRes.rows.map(async (st) => {
     // Buscar si tiene matricula para evaluar logica de promocion y obtener datos completos
     const mRes = await query(`
-      SELECT g.nombre as grado_nombre, n.nombre as nivel_nombre, s.nombre as seccion_nombre, a.anio, m.estado_matricula, m.tipo_vacante
+      SELECT g.nombre as grado_nombre, n.nombre as nivel_nombre, a.anio, m.estado_matricula, m.tipo_vacante
       FROM matriculas m
       JOIN grados g ON m.grado_id = g.id
       JOIN niveles n ON g.nivel_id = n.id
-      LEFT JOIN secciones s ON m.seccion_id = s.id
       LEFT JOIN anios_escolares a ON m.anio_id = a.id
       WHERE m.estudiante_id = $1
       ORDER BY m.id DESC LIMIT 1
@@ -64,7 +62,6 @@ export async function fetchStudentsData(filters) {
     let canGraduate = false;
     let canPassToSecondary = false;
     let gradoActual = '';
-    let seccionActual = '';
     let gradoNombre = '';
     let anioActual = '';
     let estado_matricula = '';
@@ -73,7 +70,6 @@ export async function fetchStudentsData(filters) {
     if (mRes.rows.length > 0) {
       const m = mRes.rows[0];
       gradoActual = `${m.grado_nombre} de ${m.nivel_nombre}`;
-      seccionActual = m.seccion_nombre || 'No asignada';
       gradoNombre = m.grado_nombre;
       anioActual = m.anio;
       estado_matricula = m.estado_matricula;
@@ -89,7 +85,7 @@ export async function fetchStudentsData(filters) {
       if (is6toPrimaria) canPassToSecondary = true;
     }
 
-    return { ...st, canGraduate, canPassToSecondary, gradoActual, seccionActual, gradoNombre, anioActual, estado_matricula, tipo_vacante };
+    return { ...st, canGraduate, canPassToSecondary, gradoActual, gradoNombre, anioActual, estado_matricula, tipo_vacante };
   }));
 
   return {
@@ -109,21 +105,19 @@ export async function fetchStudentsData(filters) {
 export async function getFilterOptions() {
   try {
     const currentYear = new Date().getFullYear();
-    const [anios, niveles, grados, secciones] = await Promise.all([
+    const [anios, niveles, grados] = await Promise.all([
       query('SELECT * FROM anios_escolares WHERE anio <= $1 ORDER BY anio DESC', [currentYear]),
       query('SELECT * FROM niveles ORDER BY id ASC'),
-      query('SELECT * FROM grados ORDER BY id ASC'),
-      query('SELECT * FROM secciones ORDER BY id ASC')
+      query('SELECT * FROM grados ORDER BY id ASC')
     ]);
     return {
       anios: anios.rows,
       niveles: niveles.rows,
-      grados: grados.rows,
-      secciones: secciones.rows
+      grados: grados.rows
     };
   } catch (error) {
     console.error('Error al obtener opciones de filtro:', error);
-    return { anios: [], niveles: [], grados: [], secciones: [] };
+    return { anios: [], niveles: [], grados: [] };
   }
 }
 
@@ -192,9 +186,9 @@ export async function deleteStudent(id) {
   return { success: true };
 }
 
-export async function bulkEnrollStudents(studentIds, anio_id, grado_id, seccion_id) {
+export async function bulkEnrollStudents(studentIds, anio_id, grado_id) {
   if (!studentIds || !studentIds.length) throw new Error('No hay estudiantes seleccionados');
-  if (!anio_id || !grado_id || !seccion_id) throw new Error('Faltan datos de la matrícula (Año, Grado o Sección)');
+  if (!anio_id || !grado_id) throw new Error('Faltan datos de la matrícula (Año o Grado)');
 
   for (let id of studentIds) {
     // Evitar duplicados
@@ -203,9 +197,9 @@ export async function bulkEnrollStudents(studentIds, anio_id, grado_id, seccion_
       // Intentar matricular, si algún trigger falla (ej. restricción entre nivel y grado), paramos o seguimos
       try {
         await query(`
-          INSERT INTO matriculas (estudiante_id, anio_id, grado_id, seccion_id, fecha_matricula) 
-          VALUES ($1, $2, $3, $4, CURRENT_DATE)
-        `, [id, anio_id, grado_id, seccion_id]);
+          INSERT INTO matriculas (estudiante_id, anio_id, grado_id, fecha_matricula) 
+          VALUES ($1, $2, $3, CURRENT_DATE)
+        `, [id, anio_id, grado_id]);
       } catch (err) {
         throw new Error(`Error al matricular estudiante ID ${id}: ${err.message}`);
       }
@@ -213,9 +207,9 @@ export async function bulkEnrollStudents(studentIds, anio_id, grado_id, seccion_
       // Si ya está matriculado en este año, podríamos actualizarle su matrícula actual en lugar de saltarlo.
       // O simplemente actualizarlo. Actualizamos:
       await query(`
-        UPDATE matriculas SET grado_id = $1, seccion_id = $2, fecha_matricula = CURRENT_DATE
-        WHERE estudiante_id = $3 AND anio_id = $4
-      `, [grado_id, seccion_id, id, anio_id]);
+        UPDATE matriculas SET grado_id = $1, fecha_matricula = CURRENT_DATE
+        WHERE estudiante_id = $2 AND anio_id = $3
+      `, [grado_id, id, anio_id]);
     }
   }
 

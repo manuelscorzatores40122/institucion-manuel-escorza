@@ -12,6 +12,7 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
   const [studentsData, setStudentsData] = useState({ data: [], total: 0, from: 0, to: 0, last_page: 1, links: [] });
   const [loading, setLoading] = useState(true);
   const [selectedStudent, setSelectedStudent] = useState(null);
+  const [showGuardiansProfile, setShowGuardiansProfile] = useState(false);
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false });
   const [openDropdownId, setOpenDropdownId] = useState(null);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -184,53 +185,71 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
     return title;
   };
 
-  const handleExportPDF = () => {
-    const doc = new jsPDF('landscape');
-    const title = generateExportTitle();
+  const handleExportPDF = async () => {
+    setLoading(true);
+    try {
+      const allDataRes = await fetchStudentsData({ ...filters, exportAll: true });
+      const exportData = allDataRes.data;
+      
+      const doc = new jsPDF('landscape');
+      const title = generateExportTitle();
 
-    doc.setFontSize(16);
-    doc.text(title, 14, 20);
-    doc.setFontSize(10);
-    doc.text(`Generado el: ${new Date().toLocaleDateString()}`, 14, 28);
+      doc.setFontSize(16);
+      doc.text(title, 14, 20);
+      doc.setFontSize(10);
+      doc.text(`Generado el: ${new Date().toLocaleDateString()}`, 14, 28);
 
-    // AutoTable
-    autoTable(doc, {
-      startY: 35,
-      head: [['DNI', 'Apellidos y Nombres', 'Celular', 'Apoderados (Nombre)', 'Matrícula (Referencial)']],
-      body: studentsData.data.map(st => [
-        st.dni,
-        `${st.apellido_paterno} ${st.apellido_materno}, ${st.nombres}`,
-        st.celular || 'N/A',
-        (st.padre_nombres || st.madre_nombres) ? `${st.padre_nombres || ''} / ${st.madre_nombres || ''}` : 'No',
-        st.gradoActual || 'Sin matricular'
-      ]),
-      theme: 'grid',
-      headStyles: { fillColor: [16, 185, 129] } // verde primary
-    });
+      // AutoTable
+      autoTable(doc, {
+        startY: 35,
+        head: [['DNI', 'Apellidos y Nombres', 'Celular', 'Apoderados (Nombre)', 'Matrícula (Referencial)']],
+        body: exportData.map(st => [
+          st.dni,
+          `${st.apellido_paterno} ${st.apellido_materno}, ${st.nombres}`,
+          st.celular || 'N/A',
+          (st.padre_nombres || st.madre_nombres) ? `${st.padre_nombres || ''} / ${st.madre_nombres || ''}` : 'No',
+          st.gradoActual || 'Sin matricular'
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [16, 185, 129] } // verde primary
+      });
 
-    doc.save(`${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
+      doc.save(`${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
+    } catch(err) {
+      alert("Error exportando PDF: " + err.message);
+    }
+    setLoading(false);
   };
 
-  const handleExportExcel = () => {
-    const title = generateExportTitle();
+  const handleExportExcel = async () => {
+    setLoading(true);
+    try {
+      const allDataRes = await fetchStudentsData({ ...filters, exportAll: true });
+      const exportData = allDataRes.data;
+      
+      const title = generateExportTitle();
 
-    const rows = studentsData.data.map(st => ({
-      'DNI': st.dni,
-      'Apellidos': `${st.apellido_paterno} ${st.apellido_materno}`,
-      'Nombres': st.nombres,
-      'F. Nacimiento': st.fecha_nacimiento ? new Date(st.fecha_nacimiento).toLocaleDateString() : '',
-      'Celular': st.celular || '',
-      'Domicilio': st.domicilio || '',
-      'Matrícula Actual': st.gradoActual || '',
-      'Estado': isEgresadosView ? 'Egresado' : 'Activo',
-      'Reporte Médico': st.reporte || ''
-    }));
+      const rows = exportData.map(st => ({
+        'DNI': st.dni,
+        'Apellidos': `${st.apellido_paterno} ${st.apellido_materno}`,
+        'Nombres': st.nombres,
+        'F. Nacimiento': st.fecha_nacimiento ? new Date(st.fecha_nacimiento).toLocaleDateString() : '',
+        'Celular': st.celular || '',
+        'Domicilio': st.domicilio || '',
+        'Matrícula Actual': st.gradoActual || '',
+        'Estado': isEgresadosView ? 'Egresado' : 'Activo',
+        'Reporte Médico': st.reporte || ''
+      }));
 
-    const worksheet = XLSX.utils.json_to_sheet(rows);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Estudiantes");
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Estudiantes");
 
-    XLSX.writeFile(workbook, `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
+      XLSX.writeFile(workbook, `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
+    } catch(err) {
+      alert("Error exportando Excel: " + err.message);
+    }
+    setLoading(false);
   };
 
   return (
@@ -260,7 +279,7 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
         <form id="filterForm" className="grid grid-cols-1 md-grid-cols-4 gap-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '1rem' }}>
           <div className="form-group mb-0" style={{ gridColumn: '1 / -1' }}>
             <label className="form-label"><i className='bx bx-search'></i> Búsqueda por texto</label>
-            <input type="text" name="search" className="form-control" placeholder="Buscar por DNI, Nombres, Apellidos" value={filters.search} onChange={handleFilterChange} autoComplete="off" />
+            <input type="text" name="search" className="form-control" placeholder="Buscar por DNI, Cód. Estudiante, Nombres, Apellidos" value={filters.search} onChange={handleFilterChange} autoComplete="off" />
           </div>
 
           <div className="form-group mb-0">
@@ -490,8 +509,11 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
 
               {/* Sección: Apoderados */}
               <div style={{ marginBottom: '1.5rem' }}>
-                <h4 style={{ color: '#334155', borderBottom: '2px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 1rem 0' }}>
-                  <i className='bx bx-group' style={{ color: '#f59e0b' }}></i> Apoderados
+                <h4 style={{ color: '#334155', borderBottom: '2px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 1rem 0', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><i className='bx bx-group' style={{ color: '#f59e0b' }}></i> Apoderados</div>
+                  <button onClick={() => setShowGuardiansProfile(true)} className="btn btn-sm" style={{ background: '#f8fafc', color: '#3b82f6', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer' }}>
+                    <i className='bx bx-window-open'></i> Ver Perfil Completo
+                  </button>
                 </h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f8fafc', padding: '10px 15px', borderRadius: '8px' }}>
@@ -534,6 +556,61 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
       )}
 
 
+
+      {/* MODAL PERFIL APODERADOS */}
+      {showGuardiansProfile && selectedStudent && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(5px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100005, padding: '1rem' }}>
+          <div style={{ background: 'white', padding: '0', borderRadius: '16px', maxWidth: '700px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+            <div style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', padding: '1.5rem', position: 'relative', color: 'white' }}>
+              <button onClick={() => setShowGuardiansProfile(false)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'rgba(255,255,255,0.2)', border: 'none', width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'white', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.4)'} onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}>
+                <i className='bx bx-x' style={{ fontSize: '1.2rem' }}></i>
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'white', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                  <i className='bx bx-group'></i>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '600' }}>Perfil de Apoderados</h3>
+                  <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '1.05rem' }}>Estudiante: {selectedStudent.nombres} {selectedStudent.apellido_paterno}</p>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {/* Info Padre */}
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                <div style={{ background: '#f8fafc', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px', color: '#1e293b', fontWeight: '600' }}>
+                  <i className='bx bx-male' style={{ fontSize: '1.2rem', color: '#3b82f6' }}></i> Información del Padre
+                </div>
+                <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>DNI</span><div style={{ fontWeight: '500' }}>{selectedStudent.padre_dni || 'No registrado'}</div></div>
+                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Nombres</span><div style={{ fontWeight: '500' }}>{selectedStudent.padre_nombres || 'No registrado'}</div></div>
+                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Apellidos</span><div style={{ fontWeight: '500' }}>{selectedStudent.padre_apellidos || 'No registrado'}</div></div>
+                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Celular</span><div style={{ fontWeight: '500', color: selectedStudent.padre_celular ? '#2563eb' : 'inherit' }}>{selectedStudent.padre_celular ? <><i className='bx bx-phone' ></i> {selectedStudent.padre_celular}</> : 'No registrado'}</div></div>
+                </div>
+              </div>
+
+              {/* Info Madre */}
+              <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+                <div style={{ background: '#f8fafc', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px', color: '#1e293b', fontWeight: '600' }}>
+                  <i className='bx bx-female' style={{ fontSize: '1.2rem', color: '#ec4899' }}></i> Información de la Madre
+                </div>
+                <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>DNI</span><div style={{ fontWeight: '500' }}>{selectedStudent.madre_dni || 'No registrado'}</div></div>
+                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Nombres</span><div style={{ fontWeight: '500' }}>{selectedStudent.madre_nombres || 'No registrado'}</div></div>
+                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Apellidos</span><div style={{ fontWeight: '500' }}>{selectedStudent.madre_apellidos || 'No registrado'}</div></div>
+                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Celular</span><div style={{ fontWeight: '500', color: selectedStudent.madre_celular ? '#2563eb' : 'inherit' }}>{selectedStudent.madre_celular ? <><i className='bx bx-phone' ></i> {selectedStudent.madre_celular}</> : 'No registrado'}</div></div>
+                </div>
+              </div>
+
+            </div>
+            
+            <div style={{ padding: '1rem 1.5rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowGuardiansProfile(false)} className="btn" style={{ background: '#0f172a', color: 'white', padding: '0.6rem 1.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', border: 'none' }}>Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL MATRÍCULA MASIVA */}
       {bulkModalOpen && (

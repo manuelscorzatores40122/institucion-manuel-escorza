@@ -18,7 +18,7 @@ export async function fetchStudentsData(filters) {
   }
 
   if (search) {
-    baseQuery += ` AND (dni ILIKE $${paramIndex} OR nombres ILIKE $${paramIndex} OR apellido_paterno ILIKE $${paramIndex} OR apellido_materno ILIKE $${paramIndex} OR padre_nombres ILIKE $${paramIndex} OR madre_nombres ILIKE $${paramIndex})`;
+    baseQuery += ` AND (dni ILIKE $${paramIndex} OR codigo_estudiante ILIKE $${paramIndex} OR nombres ILIKE $${paramIndex} OR apellido_paterno ILIKE $${paramIndex} OR apellido_materno ILIKE $${paramIndex} OR padre_nombres ILIKE $${paramIndex} OR madre_nombres ILIKE $${paramIndex})`;
     queryParams.push(`%${search}%`);
     paramIndex++;
   }
@@ -41,9 +41,17 @@ export async function fetchStudentsData(filters) {
   const countRes = await query(`SELECT COUNT(*) ${baseQuery}`, queryParams);
   const total = parseInt(countRes.rows[0].count, 10);
 
-  const limitIdx = paramIndex++;
-  const offsetIdx = paramIndex++;
-  const dataRes = await query(`SELECT * ${baseQuery} ORDER BY id DESC LIMIT $${limitIdx} OFFSET $${offsetIdx}`, [...queryParams, limit, offset]);
+  let queryStr = `SELECT * ${baseQuery} ORDER BY id DESC`;
+  const queryParamsFinal = [...queryParams];
+  
+  if (!filters.exportAll) {
+    const limitIdx = paramIndex++;
+    const offsetIdx = paramIndex++;
+    queryStr += ` LIMIT $${limitIdx} OFFSET $${offsetIdx}`;
+    queryParamsFinal.push(limit, offset);
+  }
+
+  const dataRes = await query(queryStr, queryParamsFinal);
 
   // Analizar cada estudiante para graduacion
   const data = await Promise.all(dataRes.rows.map(async (st) => {

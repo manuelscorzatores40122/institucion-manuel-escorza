@@ -2,6 +2,7 @@ import { cookies } from 'next/headers';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import Topbar from './Topbar';
+import DashboardLayoutClient from './DashboardLayoutClient';
 
 async function getUser() {
   const cookieStore = await cookies();
@@ -24,42 +25,8 @@ export default async function DashboardLayout({ children }) {
   }
 
   return (
-    <div className="dashboard-wrapper">
-      {/* Sidebar */}
-      <aside className="sidebar">
-        <div className="sidebar-header">
-          <img src="/logo.png" alt="Logo I.E. Manuel Scorza" style={{ height: '40px', width: 'auto' }} />
-          <h2>I.E. Manuel Scorza</h2>
-        </div>
-        <nav className="sidebar-nav">
-          <Link href="/dashboard" className="nav-item">
-            <i className='bx bxs-dashboard'></i> Dashboard
-          </Link>
-          <Link href="/students" className="nav-item">
-            <i className='bx bxs-user-detail'></i> Estudiantes
-          </Link>
-          <Link href="/guardians" className="nav-item">
-            <i className='bx bxs-group'></i> Apoderados
-          </Link>
-          <Link href="/enrollments" className="nav-item">
-            <i className='bx bx-clipboard'></i> Matrículas
-          </Link>
-          {user.nombre_usuario === 'admin' && (
-            <Link href="/users" className="nav-item">
-              <i className='bx bxs-user-account'></i> Usuarios
-            </Link>
-          )}
-        </nav>
-      </aside>
-
-      {/* Main Content */}
-      <main className="main-content">
-        <Topbar user={user} />
-
-        <div className="page-content">
-          {children}
-        </div>
-      </main>
-    </div>
+    <DashboardLayoutClient user={user}>
+      {children}
+    </DashboardLayoutClient>
   );
 }

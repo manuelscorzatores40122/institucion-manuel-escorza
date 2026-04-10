@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 
-export default function Topbar({ user }) {
+export default function Topbar({ user, isCollapsed, toggleSidebar }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -20,7 +20,16 @@ export default function Topbar({ user }) {
 
   return (
     <header className="topbar">
-      <div className="search-bar"></div>
+      <div className="d-flex align-center gap-3">
+        <button 
+          onClick={toggleSidebar} 
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', transition: 'background-color 0.2s', color: 'var(--text-color)' }}
+          onMouseOver={e => e.currentTarget.style.backgroundColor = '#f1f5f9'}
+          onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+        >
+          <i className={isCollapsed ? 'bx bx-menu' : 'bx bx-menu-alt-left'} style={{ fontSize: '1.5rem' }}></i>
+        </button>
+      </div>
       <div className="dropdown" ref={dropdownRef}>
         <div className="d-flex align-center gap-2" style={{ cursor: 'pointer' }} onClick={() => setIsOpen(!isOpen)}>
           <span className="user-greeting">Hola, <b>{user.nombre_usuario}</b></span>

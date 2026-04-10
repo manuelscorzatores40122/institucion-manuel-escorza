@@ -6,15 +6,18 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { saveStudent, searchStudentByDni } from '../actions';
 import { getDepartamentos, getProvinciasByDeptId, getDistritosByProvId } from '@/lib/ubigeo';
 
-export default function CreateStudentClient() {
+export default function CreateStudentClient({ options }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { anios, niveles, grados, secciones } = options || { anios: [], niveles: [], grados: [], secciones: [] };
+
   const [formData, setFormData] = useState({
-    id: '', dni: '', apellido_paterno: '', apellido_materno: '', nombres: '', 
+    id: '', codigo_estudiante: '', dni: '', apellido_paterno: '', apellido_materno: '', nombres: '', sexo: '',
     fecha_nacimiento: '', departamento_nacimiento: '', provincia_nacimiento: '', distrito_nacimiento: '', 
     domicilio: '', reporte: '', 
     padre_dni: '', padre_celular: '', padre_apellidos: '', padre_nombres: '',
-    madre_dni: '', madre_celular: '', madre_apellidos: '', madre_nombres: ''
+    madre_dni: '', madre_celular: '', madre_apellidos: '', madre_nombres: '',
+    anio_id: '', nivel_id: '', grado_id: '', seccion_id: ''
   });
   
   const [isUpdateMode, setIsUpdateMode] = useState(false);
@@ -41,7 +44,9 @@ export default function CreateStudentClient() {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    if (name === 'nivel_id') setFormData(prev => ({ ...prev, nivel_id: value, grado_id: '', seccion_id: '' }));
+    else if (name === 'grado_id') setFormData(prev => ({ ...prev, grado_id: value, seccion_id: '' }));
+    else setFormData(prev => ({ ...prev, [name]: value }));
 
     if (name === 'dni') {
       if (value.length >= 1) {
@@ -60,10 +65,12 @@ export default function CreateStudentClient() {
   const handleSelectSuggestion = async (student) => {
     setFormData({
       id: student.id,
+      codigo_estudiante: student.codigo_estudiante || '',
       dni: student.dni || '',
       apellido_paterno: student.apellido_paterno || '',
       apellido_materno: student.apellido_materno || '',
       nombres: student.nombres || '',
+      sexo: student.sexo || '',
       fecha_nacimiento: student.fecha_nacimiento ? (new Date(student.fecha_nacimiento).toISOString().slice(0, 10)) : '',
       departamento_nacimiento: student.departamento_nacimiento || '',
       provincia_nacimiento: student.provincia_nacimiento || '',
@@ -77,7 +84,8 @@ export default function CreateStudentClient() {
       madre_dni: student.madre_dni || '',
       madre_celular: student.madre_celular || '',
       madre_apellidos: student.madre_apellidos || '',
-      madre_nombres: student.madre_nombres || ''
+      madre_nombres: student.madre_nombres || '',
+      anio_id: '', nivel_id: '', grado_id: '', seccion_id: ''
     });
     setSuggestions([]);
     setIsUpdateMode(true);
@@ -159,6 +167,11 @@ export default function CreateStudentClient() {
             </div>
           </div>
 
+          <div className="form-group" style={{ gridColumn: 'span 2' }}>
+            <label className="form-label" htmlFor="codigo_estudiante">Código de Estudiante (Opcional - SIAGIE / Interno)</label>
+            <input type="text" className="form-control" id="codigo_estudiante" name="codigo_estudiante" value={formData.codigo_estudiante} onChange={handleInputChange} placeholder="Ej. 240225..." />
+          </div>
+
           <div className="form-group">
             <label className="form-label" htmlFor="apellido_paterno">Apellido Paterno</label>
             <input type="text" className="form-control" id="apellido_paterno" name="apellido_paterno" value={formData.apellido_paterno} onChange={handleInputChange} required />
@@ -172,6 +185,15 @@ export default function CreateStudentClient() {
           <div className="form-group" style={{ gridColumn: 'span 2' }}>
             <label className="form-label" htmlFor="nombres">Nombres</label>
             <input type="text" className="form-control" id="nombres" name="nombres" value={formData.nombres} onChange={handleInputChange} required />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="sexo">Sexo</label>
+            <select className="form-control" id="sexo" name="sexo" value={formData.sexo} onChange={handleInputChange} required>
+              <option value="">-- Seleccionar --</option>
+              <option value="H">Hombre</option>
+              <option value="M">Mujer</option>
+            </select>
           </div>
 
           <div className="form-group">
@@ -260,6 +282,53 @@ export default function CreateStudentClient() {
             <label className="form-label" htmlFor="madre_nombres">Nombres de la Madre</label>
             <input type="text" className="form-control" id="madre_nombres" name="madre_nombres" value={formData.madre_nombres} onChange={handleInputChange} />
           </div>
+
+          {/* Bloque de Matrícula Integrado */}
+          <div className="form-group" style={{ gridColumn: 'span 2', marginTop: '1.5rem', background: '#F8FAFC', padding: '15px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+            <h4 style={{ color: 'var(--primary)', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <i className='bx bx-book-bookmark'></i> Matrícula (Opcional - Únete al Estudiante a un Aula Directamente)
+            </h4>
+            <div className="grid grid-cols-2 gap-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '1rem' }}>
+              
+              <div className="form-group mb-0">
+                <label className="form-label">Año Escolar</label>
+                <select name="anio_id" className="form-control" value={formData.anio_id} onChange={handleInputChange}>
+                  <option value="">-- No Matricular Aún --</option>
+                  {anios?.map(a => <option key={a.id} value={a.id}>{a.anio}</option>)}
+                </select>
+              </div>
+
+              <div className="form-group mb-0">
+                <label className="form-label">Nivel</label>
+                <select name="nivel_id" className="form-control" value={formData.nivel_id} onChange={handleInputChange} disabled={!formData.anio_id}>
+                  <option value="">-- Seleccionar --</option>
+                  {niveles?.map(n => <option key={n.id} value={n.id}>{n.nombre}</option>)}
+                </select>
+              </div>
+
+              <div className="form-group mb-0">
+                <label className="form-label">Grado</label>
+                <select name="grado_id" className="form-control" value={formData.grado_id} onChange={handleInputChange} disabled={!formData.nivel_id}>
+                  <option value="">-- Seleccionar --</option>
+                  {grados?.filter(g => g.nivel_id == formData.nivel_id).map(g => (
+                    <option key={g.id} value={g.id}>{g.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group mb-0">
+                <label className="form-label">Sección</label>
+                <select name="seccion_id" className="form-control" value={formData.seccion_id} onChange={handleInputChange} disabled={!formData.grado_id}>
+                  <option value="">-- Seleccionar --</option>
+                  {secciones?.filter(s => s.grado_id == formData.grado_id).map(s => (
+                    <option key={s.id} value={s.id}>{s.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+            </div>
+          </div>
+
         </div>
 
         <div className="text-right mt-4" style={{ textAlign: 'right' }}>

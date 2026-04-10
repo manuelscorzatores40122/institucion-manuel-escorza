@@ -180,10 +180,6 @@ INSERT INTO usuarios (nombre_usuario, contrasena)
 VALUES ('admin', '$2b$10$B3eRHHlkd7P9tkXiUTjcye8n6Y0c/g/ZNbhH.UR05QzX2x7U6EKtG')
 ON CONFLICT (nombre_usuario) DO UPDATE SET contrasena = EXCLUDED.contrasena;
 
-INSERT INTO usuarios (nombre_usuario, contrasena)
-VALUES ('yerson', '$2b$10$DqzQDj8f7LW2oHJgE0KVTu5ujCm6bLZBOg9aKZcOcn2xHajT')
-ON CONFLICT (nombre_usuario) DO UPDATE SET contrasena = EXCLUDED.contrasena;
-
 -- ============================================================
 -- DATOS: niveles, grados, secciones, año escolar
 -- ============================================================
@@ -210,6 +206,7 @@ ON CONFLICT (nivel_id, nombre) DO NOTHING;
 INSERT INTO secciones (id, grado_id, nombre) VALUES
   (1, 1, 'A'),
   (2, 1, 'B'),
+  (22, 2, 'A'),
   (3, 2, 'B'),
   (4, 3, 'A'),
   (5, 3, 'B'),
@@ -235,7 +232,7 @@ INSERT INTO anios_escolares (id, anio) VALUES (1, 2026)
 ON CONFLICT (anio) DO NOTHING;
 
 SELECT setval('grados_id_seq', 11);
-SELECT setval('secciones_id_seq', 21);
+SELECT setval('secciones_id_seq', 22);
 SELECT setval('anios_escolares_id_seq', 1);
 
 -- ============================================================

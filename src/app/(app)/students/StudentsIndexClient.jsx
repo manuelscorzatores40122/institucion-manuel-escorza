@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { fetchStudentsData, deleteStudent, toggleEgresadoStatus, bulkEnrollStudents } from './actions';
+import { fetchStudentsData, deleteStudent, toggleEgresadoStatus, bulkEnrollStudents, bulkDeleteStudents } from './actions';
 import ConfirmModal from '../ConfirmModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -17,17 +17,18 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkModalOpen, setBulkModalOpen] = useState(false);
-  const [bulkForm, setBulkForm] = useState({ anio_id: '', nivel_id: '', grado_id: '' });
+  const [bulkForm, setBulkForm] = useState({ anio_id: '', nivel_id: '', grado_id: '', seccion_id: '' });
   const [filters, setFilters] = useState({
     search: '',
     egresados: '0',
     anio_id: '',
     nivel_id: '',
     grado_id: '',
+    seccion_id: '',
     page: 1
   });
 
-  const { anios, niveles, grados } = initialFiltersParams;
+  const { anios, niveles, grados, secciones } = initialFiltersParams;
 
   useEffect(() => {
     let debounceTimer = setTimeout(() => {
@@ -45,8 +46,8 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'nivel_id') setFilters(p => ({ ...p, nivel_id: value, grado_id: '', page: 1 }));
-    else if (name === 'grado_id') setFilters(p => ({ ...p, grado_id: value, page: 1 }));
+    if (name === 'nivel_id') setFilters(p => ({ ...p, nivel_id: value, grado_id: '', seccion_id: '', page: 1 }));
+    else if (name === 'grado_id') setFilters(p => ({ ...p, grado_id: value, seccion_id: '', page: 1 }));
     else setFilters(p => ({ ...p, [name]: value, page: 1 }));
   };
 
@@ -109,20 +110,56 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
 
   const handleBulkEnroll = async (e) => {
     e.preventDefault();
-    if (!bulkForm.anio_id || !bulkForm.grado_id) {
-      alert("Faltan datos requeridos");
+    if (!bulkForm.anio_id || !bulkForm.grado_id || !bulkForm.seccion_id) {
+      alert("Faltan datos requeridos (Año, Grado o Sección)");
       return;
     }
     setLoading(true);
     setBulkModalOpen(false);
     try {
-      await bulkEnrollStudents(selectedIds, bulkForm.anio_id, bulkForm.grado_id);
+      await bulkEnrollStudents(selectedIds, bulkForm.anio_id, bulkForm.grado_id, bulkForm.seccion_id);
       setSelectedIds([]);
       loadData(filters);
     } catch (err) {
       alert(err.message);
       setLoading(false);
     }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return alert('No hay estudiantes seleccionados.');
+    
+    setConfirmConfig({
+      isOpen: true,
+      title: 'Eliminar Múltiples Estudiantes',
+      message: `¿Estás completamente seguro de eliminar a estos ${selectedIds.length} estudiantes? Esta acción eliminará permanentemente todos sus registros y matrículas y NO se puede deshacer.`,
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          await bulkDeleteStudents(selectedIds);
+          setSelectedIds([]);
+          setConfirmConfig({ isOpen: false });
+          loadData(filters);
+        } catch (err) {
+          alert(`Error eliminando alumnos: ${err.message}`);
+          setLoading(false);
+        }
+      },
+      onCancel: () => setConfirmConfig({ isOpen: false })
+    });
+  };
+
+  // UTILIDADES
+  const getEdad = (fecha) => {
+    if (!fecha) return 'No registrada';
+    const hoy = new Date();
+    const nac = new Date(fecha);
+    let edad = hoy.getFullYear() - nac.getFullYear();
+    const m = hoy.getMonth() - nac.getMonth();
+    if (m < 0 || (m === 0 && hoy.getDate() < nac.getDate())) {
+      edad--;
+    }
+    return edad + ' años';
   };
 
   // EXPORTS
@@ -139,6 +176,10 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
     if (filters.grado_id) {
       const g = grados?.find(x => x.id == filters.grado_id);
       if (g) title += ` - ${g.nombre}`;
+    }
+    if (filters.seccion_id) {
+      const s = secciones?.find(x => x.id == filters.seccion_id);
+      if (s) title += ` - Secc. ${s.nombre}`;
     }
     return title;
   };
@@ -205,15 +246,19 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
               <i className={isSelectionMode ? 'bx bx-x' : 'bx bx-check-double'}></i> {isSelectionMode ? 'Cancelar Selección' : 'Selección Múltiple'}
             </button>
           )}
-          <Link href="/students/create" className="btn btn-primary" style={{ textDecoration: 'none' }}>
-            <i className='bx bx-plus'></i> Registrar Estudiante
-          </Link>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            {!isEgresadosView && (
+              <Link href="/students/create" className="btn btn-sm btn-primary" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <i className='bx bx-plus'></i> Nuevo
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 
       <div className="filters-container mb-4 p-3" style={{ background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', padding: '1rem' }}>
-        <form id="filterForm" className="grid grid-cols-1 md-grid-cols-3 gap-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1rem' }}>
-          <div className="form-group mb-0" style={{ gridColumn: 'span 3' }}>
+        <form id="filterForm" className="grid grid-cols-1 md-grid-cols-4 gap-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '1rem' }}>
+          <div className="form-group mb-0" style={{ gridColumn: '1 / -1' }}>
             <label className="form-label"><i className='bx bx-search'></i> Búsqueda por texto</label>
             <input type="text" name="search" className="form-control" placeholder="Buscar por DNI, Nombres, Apellidos" value={filters.search} onChange={handleFilterChange} autoComplete="off" />
           </div>
@@ -221,7 +266,7 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
           <div className="form-group mb-0">
             <label className="form-label">Año Escolar</label>
             <select name="anio_id" className="form-control" value={filters.anio_id} onChange={handleFilterChange}>
-              <option value="">Todos los años</option>
+              <option value="">Todos</option>
               {anios?.map(a => <option key={a.id} value={a.id}>{a.anio}</option>)}
             </select>
           </div>
@@ -229,8 +274,28 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
           <div className="form-group mb-0">
             <label className="form-label">Nivel</label>
             <select name="nivel_id" className="form-control" value={filters.nivel_id} onChange={handleFilterChange}>
-              <option value="">Todos los niveles</option>
+              <option value="">Todos</option>
               {niveles?.map(n => <option key={n.id} value={n.id}>{n.nombre}</option>)}
+            </select>
+          </div>
+
+          <div className="form-group mb-0">
+            <label className="form-label">Grado</label>
+            <select name="grado_id" className="form-control" value={filters.grado_id} onChange={handleFilterChange} disabled={!filters.nivel_id}>
+              <option value="">Todos</option>
+              {grados?.filter(g => g.nivel_id == filters.nivel_id).map(g => (
+                <option key={g.id} value={g.id}>{g.nombre}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group mb-0">
+            <label className="form-label">Sección</label>
+            <select name="seccion_id" className="form-control" value={filters.seccion_id} onChange={handleFilterChange} disabled={!filters.grado_id}>
+              <option value="">Todas</option>
+              {secciones?.filter(s => s.grado_id == filters.grado_id).map(s => (
+                <option key={s.id} value={s.id}>{s.nombre}</option>
+              ))}
             </select>
           </div>
         </form>
@@ -245,8 +310,11 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
             </div>
             <div style={{ display: 'flex', gap: '10px' }}>
               <button onClick={() => setSelectedIds([])} className="btn btn-sm" style={{ background: 'transparent', color: 'white', border: '1px solid white' }}>Cancelar</button>
-              <button onClick={() => setBulkModalOpen(true)} className="btn btn-sm" style={{ background: 'white', color: '#3b82f6', fontWeight: 'bold' }}>
-                <i className='bx bx-trending-up'></i> Promover Selección
+              <button className="btn btn-sm" style={{ background: '#3b82f6', color: 'white' }} onClick={() => setBulkModalOpen(true)}>
+                <i className='bx bx-book-bookmark'></i> Matricular {selectedIds.length} Alumnos
+              </button>
+              <button className="btn btn-sm" style={{ background: '#ef4444', color: 'white' }} onClick={handleBulkDelete}>
+                <i className='bx bx-trash'></i> Eliminar {selectedIds.length} Alumnos
               </button>
             </div>
           </div>
@@ -371,43 +439,95 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
 
       {/* MODAL PERFIL ALUMNO */}
       {selectedStudent && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(3px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100000 }}>
-          <div style={{ background: 'white', padding: '2rem', borderRadius: '12px', maxWidth: '500px', width: '90%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', borderTop: '5px solid #10B981' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1rem' }}>
-              <h3 style={{ margin: 0, color: 'var(--text-color)', fontSize: '1.4rem' }}><i className='bx bx-user-circle' style={{ color: '#10B981', marginRight: '8px' }}></i>Perfil de Estudiante</h3>
-              <button onClick={() => setSelectedStudent(null)} style={{ background: 'transparent', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#64748b' }}>&times;</button>
-            </div>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(5px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100000, padding: '1rem' }}>
+          <div style={{ background: 'white', padding: '0', borderRadius: '16px', maxWidth: '600px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
 
-            <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', marginBottom: '1rem' }}>
-              <p style={{ margin: '0 0 8px', fontSize: '1.1rem' }}><b>{selectedStudent.apellido_paterno} {selectedStudent.apellido_materno}, {selectedStudent.nombres}</b></p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', fontSize: '0.95rem' }}>
-                <div><span style={{ color: '#64748b' }}>Cód. Estudiantil:</span> {selectedStudent.codigo_estudiante || 'No asignado'}</div>
-                <div><span style={{ color: '#64748b' }}>DNI:</span> {selectedStudent.dni || 'Extranjero (Sin Doc)'}</div>
-                <div><span style={{ color: '#64748b' }}>Sexo:</span> {selectedStudent.sexo === 'H' ? 'Masculino' : selectedStudent.sexo === 'M' ? 'Femenino' : 'No registrado'}</div>
-                <div><span style={{ color: '#64748b' }}>Año Curricular:</span> {selectedStudent.anioActual || 'No registrado'}</div>
-                <div><span style={{ color: '#64748b' }}>Grado:</span> {selectedStudent.gradoNombre || 'No asignado'}</div>
-                <div><span style={{ color: '#64748b' }}>Est. Matrícula:</span> {selectedStudent.estado_matricula || 'No registrada'}</div>
-                <div><span style={{ color: '#64748b' }}>Tipo Vacante:</span> {selectedStudent.tipo_vacante || 'No especificado'}</div>
-                <div><span style={{ color: '#64748b' }}>Celular:</span> {selectedStudent.celular || 'No registrado'}</div>
-                <div style={{ gridColumn: 'span 2' }}><span style={{ color: '#64748b' }}>Domicilio:</span> {selectedStudent.domicilio || 'No especificado'}</div>
+            {/* Cabecera del Modal */}
+            <div style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', padding: '1.5rem', position: 'relative', color: 'white' }}>
+              <button onClick={() => setSelectedStudent(null)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'rgba(255,255,255,0.2)', border: 'none', width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'white', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.4)'} onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}>
+                <i className='bx bx-x' style={{ fontSize: '1.2rem' }}></i>
+              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'white', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
+                  <i className='bx bxs-user'></i>
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '600' }}>{selectedStudent.nombres}</h3>
+                  <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '1.05rem' }}>{selectedStudent.apellido_paterno} {selectedStudent.apellido_materno}</p>
+                </div>
               </div>
             </div>
 
-            <div style={{ marginBottom: '1rem' }}>
-              <p style={{ fontWeight: 'bold', margin: '0 0 5px', color: '#475569' }}>Apoderados:</p>
-              <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '0.95rem', color: '#475569' }}>
-                <li><b>Padre:</b> {selectedStudent.padre_nombres || 'No especificado'}</li>
-                <li><b>Madre:</b> {selectedStudent.madre_nombres || 'No especificada'}</li>
-              </ul>
+            {/* Contenido Scrolleable */}
+            <div style={{ padding: '1.5rem', overflowY: 'auto' }}>
+
+              {/* Sección: Datos Personales */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ color: '#334155', borderBottom: '2px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 1rem 0' }}>
+                  <i className='bx bx-id-card' style={{ color: '#3b82f6' }}></i> Información Personal
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.95rem' }}>
+                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>DNI</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.dni || 'Extranjero (Sin Doc)'}</div></div>
+                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Edad</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{getEdad(selectedStudent.fecha_nacimiento)}</div></div>
+                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Sexo</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.sexo === 'H' ? 'Hombre' : selectedStudent.sexo === 'M' ? 'Mujer' : selectedStudent.sexo || 'No registrado'}</div></div>
+                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Celular</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.celular || 'No registrado'}</div></div>
+                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', gridColumn: 'span 2' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Domicilio</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.domicilio || 'No especificado'}</div></div>
+                </div>
+              </div>
+
+              {/* Sección: Datos Académicos */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ color: '#334155', borderBottom: '2px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 1rem 0' }}>
+                  <i className='bx bx-book-open' style={{ color: '#8b5cf6' }}></i> Información Académica
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.95rem' }}>
+                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Cód. Estudiantil</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.codigo_estudiante || 'No asignado'}</div></div>
+                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Estado Matrícula</span> <div style={{ fontWeight: '600', color: '#0f172a' }}><span style={{ display: 'inline-block', padding: '2px 8px', background: '#dcfce7', color: '#166534', borderRadius: '12px', fontSize: '0.85rem' }}>{selectedStudent.estado_matricula || 'No registrada'}</span></div></div>
+                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Grado Actual</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.gradoNombre || 'No asignado'}</div></div>
+                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Tipo Vacante</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.tipo_vacante || 'No especificado'}</div></div>
+                </div>
+              </div>
+
+              {/* Sección: Apoderados */}
+              <div style={{ marginBottom: '1.5rem' }}>
+                <h4 style={{ color: '#334155', borderBottom: '2px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 1rem 0' }}>
+                  <i className='bx bx-group' style={{ color: '#f59e0b' }}></i> Apoderados
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f8fafc', padding: '10px 15px', borderRadius: '8px' }}>
+                    <div style={{ width: '35px', height: '35px', borderRadius: '50%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}><i className='bx bx-male'></i></div>
+                    <div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '500' }}>Padre</div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: '500', color: '#0f172a' }}>{selectedStudent.padre_nombres ? `${selectedStudent.padre_nombres} ${selectedStudent.padre_apellidos || ''}` : 'No especificado'}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f8fafc', padding: '10px 15px', borderRadius: '8px' }}>
+                    <div style={{ width: '35px', height: '35px', borderRadius: '50%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}><i className='bx bx-female'></i></div>
+                    <div>
+                      <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '500' }}>Madre</div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: '500', color: '#0f172a' }}>{selectedStudent.madre_nombres ? `${selectedStudent.madre_nombres} ${selectedStudent.madre_apellidos || ''}` : 'No especificada'}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección: Médico */}
+              {(selectedStudent.reporte) ? (
+                <div style={{ background: '#fffbeb', borderLeft: '4px solid #f59e0b', padding: '15px', borderRadius: '0 8px 8px 0', color: '#92400e' }}>
+                  <p style={{ margin: '0 0 5px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '5px' }}><i className='bx bx-plus-medical'></i> Reporte Médico / observaciones</p>
+                  <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: '1.5' }}>{selectedStudent.reporte}</p>
+                </div>
+              ) : (
+                <div style={{ background: '#f1f5f9', borderLeft: '4px solid #cbd5e1', padding: '15px', borderRadius: '0 8px 8px 0', color: '#475569' }}>
+                  <p style={{ margin: '0 0 5px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '5px' }}><i className='bx bx-info-circle'></i> Reporte Médico / observaciones</p>
+                  <p style={{ margin: 0, fontSize: '0.95rem', fontStyle: 'italic' }}>Este estudiante no presenta observaciones médicas ni conductuales registradas.</p>
+                </div>
+              )}
             </div>
 
-            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', padding: '15px', borderRadius: '8px', color: '#92400e' }}>
-              <p style={{ margin: '0 0 5px', fontWeight: 'bold' }}><i className='bx bx-info-circle'></i> Información Médica / Conductual:</p>
-              <p style={{ margin: 0, fontSize: '0.95rem' }}>{selectedStudent.reporte || 'El estudiante no presenta observaciones médicas ni conductuales registradas en su ficha actual.'}</p>
-            </div>
-
-            <div style={{ marginTop: '1.5rem', textAlign: 'right' }}>
-              <button onClick={() => setSelectedStudent(null)} className="btn btn-primary" style={{ padding: '0.5rem 1.5rem', borderRadius: '6px' }}>Cerrar Ficha</button>
+            {/* Pie del modal */}
+            <div style={{ padding: '1rem 1.5rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
+              <button onClick={() => setSelectedStudent(null)} className="btn" style={{ background: '#0f172a', color: 'white', padding: '0.6rem 1.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', border: 'none' }}>Cerrar Tarjeta</button>
             </div>
           </div>
         </div>
@@ -431,16 +551,23 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
               </div>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Nivel destino</label>
-                <select className="form-control" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} value={bulkForm.nivel_id} onChange={e => setBulkForm({ ...bulkForm, nivel_id: e.target.value, grado_id: '' })} required>
+                <select className="form-control" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} value={bulkForm.nivel_id} onChange={e => setBulkForm({ ...bulkForm, nivel_id: e.target.value, grado_id: '', seccion_id: '' })} required>
                   <option value="">Selecciona nivel...</option>
                   {niveles?.map(n => <option key={n.id} value={n.id}>{n.nombre}</option>)}
                 </select>
               </div>
               <div className="form-group" style={{ marginBottom: '1rem' }}>
                 <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Grado destino</label>
-                <select className="form-control" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} value={bulkForm.grado_id} onChange={e => setBulkForm({ ...bulkForm, grado_id: e.target.value })} required disabled={!bulkForm.nivel_id}>
+                <select className="form-control" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} value={bulkForm.grado_id} onChange={e => setBulkForm({ ...bulkForm, grado_id: e.target.value, seccion_id: '' })} required disabled={!bulkForm.nivel_id}>
                   <option value="">Selecciona grado...</option>
                   {grados?.filter(g => g.nivel_id == bulkForm.nivel_id).map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                </select>
+              </div>
+              <div className="form-group" style={{ marginBottom: '1rem' }}>
+                <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>Sección destino</label>
+                <select className="form-control" style={{ width: '100%', padding: '0.5rem', border: '1px solid #cbd5e1', borderRadius: '6px' }} value={bulkForm.seccion_id} onChange={e => setBulkForm({ ...bulkForm, seccion_id: e.target.value })} required disabled={!bulkForm.grado_id}>
+                  <option value="">Selecciona sección...</option>
+                  {secciones?.filter(s => s.grado_id == bulkForm.grado_id).map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
                 </select>
               </div>
               <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '1rem' }}>

@@ -7,6 +7,7 @@ import ConfirmModal from '../ConfirmModal';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import Swal from 'sweetalert2';
 
 export default function StudentsIndexClient({ initialFiltersParams }) {
   const [studentsData, setStudentsData] = useState({ data: [], total: 0, from: 0, to: 0, last_page: 1, links: [] });
@@ -112,7 +113,7 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
   const handleBulkEnroll = async (e) => {
     e.preventDefault();
     if (!bulkForm.anio_id || !bulkForm.grado_id || !bulkForm.seccion_id) {
-      alert("Faltan datos requeridos (Año, Grado o Sección)");
+      Swal.fire({ icon: 'warning', title: 'Atención', text: 'Faltan datos requeridos (Año, Grado o Sección)' });
       return;
     }
     setLoading(true);
@@ -122,13 +123,13 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
       setSelectedIds([]);
       loadData(filters);
     } catch (err) {
-      alert(err.message);
+      Swal.fire({ icon: 'error', title: 'Error', text: err.message });
       setLoading(false);
     }
   };
 
   const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return alert('No hay estudiantes seleccionados.');
+    if (selectedIds.length === 0) return Swal.fire({ icon: 'warning', text: 'No hay estudiantes seleccionados.' });
     
     setConfirmConfig({
       isOpen: true,
@@ -142,7 +143,7 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
           setConfirmConfig({ isOpen: false });
           loadData(filters);
         } catch (err) {
-          alert(`Error eliminando alumnos: ${err.message}`);
+          Swal.fire({ icon: 'error', title: 'Error', text: `Error eliminando alumnos: ${err.message}` });
           setLoading(false);
         }
       },
@@ -216,7 +217,7 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
 
       doc.save(`${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
     } catch(err) {
-      alert("Error exportando PDF: " + err.message);
+      Swal.fire({ icon: 'error', title: 'Error', text: "Error exportando PDF: " + err.message });
     }
     setLoading(false);
   };
@@ -247,7 +248,7 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
 
       XLSX.writeFile(workbook, `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.xlsx`);
     } catch(err) {
-      alert("Error exportando Excel: " + err.message);
+      Swal.fire({ icon: 'error', title: 'Error', text: "Error exportando Excel: " + err.message });
     }
     setLoading(false);
   };

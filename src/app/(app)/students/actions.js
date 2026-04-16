@@ -189,69 +189,73 @@ export async function toggleEgresadoStatus(id, status) {
 }
 
 export async function saveStudent(data) {
-  const {
-    id, codigo_estudiante, apellido_paterno, apellido_materno, nombres, sexo, dni, celular, email,
-    fecha_nacimiento, departamento_nacimiento, provincia_nacimiento,
-    distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
-    padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular,
-    vive_con, apoderado_alterno_dni, apoderado_alterno_nombres, apoderado_alterno_apellidos, apoderado_alterno_celular,
-    anio_id, grado_id, seccion_id
-  } = data;
-
-  const validDni = dni && dni.trim() !== '' ? dni.trim() : null;
-  const validCodigo = codigo_estudiante && codigo_estudiante.trim() !== '' ? codigo_estudiante.trim() : null;
-  const validSexo = sexo === 'H' || sexo === 'M' ? sexo : null;
-  let estudianteId = id;
-
-  if (id) {
-    await query(`
-      UPDATE estudiantes SET 
-        codigo_estudiante=$1, apellido_paterno=$2, apellido_materno=$3, nombres=$4, sexo=$5, dni=$6, celular=$7, email=$8,
-        fecha_nacimiento=$9, departamento_nacimiento=$10, provincia_nacimiento=$11,
-        distrito_nacimiento=$12, domicilio=$13, reporte=$14, padre_dni=$15, padre_nombres=$16,
-        padre_apellidos=$17, padre_celular=$18, madre_dni=$19, madre_nombres=$20, madre_apellidos=$21, madre_celular=$22,
-        vive_con=$23, apoderado_alterno_dni=$24, apoderado_alterno_nombres=$25, apoderado_alterno_apellidos=$26, apoderado_alterno_celular=$27
-      WHERE id=$28
-    `, [
-      validCodigo, apellido_paterno, apellido_materno, nombres, validSexo, validDni, celular, email,
-      fecha_nacimiento || null, departamento_nacimiento, provincia_nacimiento,
+  try {
+    const {
+      id, codigo_estudiante, apellido_paterno, apellido_materno, nombres, sexo, dni, celular, email,
+      fecha_nacimiento, departamento_nacimiento, provincia_nacimiento,
       distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
       padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular,
-      vive_con, apoderado_alterno_dni, apoderado_alterno_nombres, apoderado_alterno_apellidos, apoderado_alterno_celular, id
-    ]);
-  } else {
-    const res = await query(`
-      INSERT INTO estudiantes (
-        codigo_estudiante, apellido_paterno, apellido_materno, nombres, sexo, dni, celular, email,
-        fecha_nacimiento, departamento_nacimiento, provincia_nacimiento,
+      vive_con, apoderado_alterno_dni, apoderado_alterno_nombres, apoderado_alterno_apellidos, apoderado_alterno_celular,
+      anio_id, grado_id, seccion_id
+    } = data;
+
+    const validDni = dni && dni.trim() !== '' ? dni.trim() : null;
+    const validCodigo = codigo_estudiante && codigo_estudiante.trim() !== '' ? codigo_estudiante.trim() : null;
+    const validSexo = sexo === 'H' || sexo === 'M' ? sexo : null;
+    let estudianteId = id;
+
+    if (id) {
+      await query(`
+        UPDATE estudiantes SET 
+          codigo_estudiante=$1, apellido_paterno=$2, apellido_materno=$3, nombres=$4, sexo=$5, dni=$6, celular=$7, email=$8,
+          fecha_nacimiento=$9, departamento_nacimiento=$10, provincia_nacimiento=$11,
+          distrito_nacimiento=$12, domicilio=$13, reporte=$14, padre_dni=$15, padre_nombres=$16,
+          padre_apellidos=$17, padre_celular=$18, madre_dni=$19, madre_nombres=$20, madre_apellidos=$21, madre_celular=$22,
+          vive_con=$23, apoderado_alterno_dni=$24, apoderado_alterno_nombres=$25, apoderado_alterno_apellidos=$26, apoderado_alterno_celular=$27
+        WHERE id=$28
+      `, [
+        validCodigo, apellido_paterno, apellido_materno, nombres, validSexo, validDni, celular, email,
+        fecha_nacimiento || null, departamento_nacimiento, provincia_nacimiento,
+        distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
+        padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular,
+        vive_con, apoderado_alterno_dni, apoderado_alterno_nombres, apoderado_alterno_apellidos, apoderado_alterno_celular, id
+      ]);
+    } else {
+      const res = await query(`
+        INSERT INTO estudiantes (
+          codigo_estudiante, apellido_paterno, apellido_materno, nombres, sexo, dni, celular, email,
+          fecha_nacimiento, departamento_nacimiento, provincia_nacimiento,
+          distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
+          padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular,
+          vive_con, apoderado_alterno_dni, apoderado_alterno_nombres, apoderado_alterno_apellidos, apoderado_alterno_celular
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
+        ) RETURNING id
+      `, [
+        validCodigo, apellido_paterno, apellido_materno, nombres, validSexo, validDni, celular, email,
+        fecha_nacimiento || null, departamento_nacimiento, provincia_nacimiento,
         distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
         padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular,
         vive_con, apoderado_alterno_dni, apoderado_alterno_nombres, apoderado_alterno_apellidos, apoderado_alterno_celular
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
-      ) RETURNING id
-    `, [
-      validCodigo, apellido_paterno, apellido_materno, nombres, validSexo, validDni, celular, email,
-      fecha_nacimiento || null, departamento_nacimiento, provincia_nacimiento,
-      distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
-      padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular,
-      vive_con, apoderado_alterno_dni, apoderado_alterno_nombres, apoderado_alterno_apellidos, apoderado_alterno_celular
-    ]);
-    estudianteId = res.rows[0].id;
-  }
-
-  // Si envia matriz de matricula, lo anexamos:
-  if (anio_id && grado_id && seccion_id) {
-    const matriculaExists = await query('SELECT id FROM matriculas WHERE estudiante_id = $1 AND anio_id = $2', [estudianteId, anio_id]);
-    if (matriculaExists.rows.length > 0) {
-      await query('UPDATE matriculas SET grado_id = $1, seccion_id = $2 WHERE estudiante_id = $3 AND anio_id = $4', [grado_id, seccion_id, estudianteId, anio_id]);
-    } else {
-      await query('INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula) VALUES ($1, $2, $3, $4, CURRENT_DATE)', [estudianteId, grado_id, seccion_id, anio_id]);
+      ]);
+      estudianteId = res.rows[0].id;
     }
-  }
 
-  revalidatePath('/students');
-  return { success: true };
+    // Si envia matriz de matricula, lo anexamos:
+    if (anio_id && grado_id && seccion_id) {
+      const matriculaExists = await query('SELECT id FROM matriculas WHERE estudiante_id = $1 AND anio_id = $2', [estudianteId, anio_id]);
+      if (matriculaExists.rows.length > 0) {
+        await query('UPDATE matriculas SET grado_id = $1, seccion_id = $2 WHERE estudiante_id = $3 AND anio_id = $4', [grado_id, seccion_id, estudianteId, anio_id]);
+      } else {
+        await query('INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula) VALUES ($1, $2, $3, $4, CURRENT_DATE)', [estudianteId, grado_id, seccion_id, anio_id]);
+      }
+    }
+
+    revalidatePath('/students');
+    return { success: true };
+  } catch (error) {
+    return { error: `Dato inválido o error en base de datos: ${error.detail || error.message}` };
+  }
 }
 
 

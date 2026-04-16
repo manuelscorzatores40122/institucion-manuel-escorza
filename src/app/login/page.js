@@ -44,6 +44,11 @@ export default async function LoginPage({ searchParams }) {
           <button type="submit" className="btn btn-primary btn-block mt-4">
             <i className='bx bx-log-in' style={{ verticalAlign: 'middle' }}></i> Iniciar Sesión
           </button>
+          <Link href="https://manuel-scorza-web-olive.vercel.app/">
+            <button type="button" className="btn btn-primary btn-block mt-4">
+              <i className='bx bx-log-in' style={{ verticalAlign: 'middle' }}></i> Atras
+            </button>
+          </Link>
         </form>
       </div>
     </div>

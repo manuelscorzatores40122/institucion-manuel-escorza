@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { saveStudent, searchStudentByDni, searchStudentById } from '../actions';
 import { getDepartamentos, getProvinciasByDeptId, getDistritosByProvId } from '@/lib/ubigeo';
+import Swal from 'sweetalert2';
 
 export default function CreateStudentClient({ options }) {
   const router = useRouter();
@@ -144,7 +145,11 @@ export default function CreateStudentClient({ options }) {
     e.preventDefault();
     setSuccessMsg('');
     try {
-      await saveStudent(formData);
+      const res = await saveStudent(formData);
+      if (res && res.error) {
+        Swal.fire({ icon: 'error', title: 'Error al guardar', text: res.error });
+        return;
+      }
       setSuccessMsg(isUpdateMode ? 'Datos del estudiante actualizados correctamente.' : 'Estudiante registrado correctamente.');
       if (!isUpdateMode) {
         setIsUpdateMode(true);
@@ -153,7 +158,7 @@ export default function CreateStudentClient({ options }) {
         router.push('/students');
       }, 700);
     } catch (err) {
-      alert("Error al guardar: " + err.message);
+      Swal.fire({ icon: 'error', title: 'Error al guardar', text: err.message });
     }
   };
 

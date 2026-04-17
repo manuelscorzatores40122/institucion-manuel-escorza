@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { fetchGuardiansData, deleteGuardian } from './actions';
 import ConfirmModal from '../ConfirmModal';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+import Swal from 'sweetalert2';
 
 export default function GuardiansIndexClient() {
   const [data, setData] = useState({ data: [], total: 0, from: 0, to: 0, last_page: 1, links: [] });
@@ -47,6 +51,68 @@ export default function GuardiansIndexClient() {
       },
       onCancel: () => setConfirmConfig({ isOpen: false })
     });
+  };
+
+  const handleExportPDF = async () => {
+    setLoading(true);
+    try {
+      const allDataRes = await fetchGuardiansData({ ...filters, exportAll: true });
+      const exportData = allDataRes.data;
+      
+      const doc = new jsPDF('landscape');
+      doc.setFontSize(16);
+      doc.text('Directorio Oficial de Apoderados', 14, 20);
+      doc.setFontSize(10);
+      doc.text(`Generado el: ${new Date().toLocaleDateString()}`, 14, 28);
+
+      autoTable(doc, {
+        startY: 35,
+        head: [['DNI', 'Apellidos y Nombres', 'Teléfono/Celular', 'Correo', 'Casos Asignados', 'Parentesco principal']],
+        body: exportData.map(g => [
+          g.dni,
+          `${g.apellido_paterno} ${g.apellido_materno}, ${g.nombres}`,
+          g.celular || '-',
+          g.correo || '-',
+          g.estudiantes ? g.estudiantes.map(e => e.nombres).join(', ') : 'Ninguno',
+          g.parentesco
+        ]),
+        theme: 'grid',
+        headStyles: { fillColor: [245, 158, 11] } // orange primary
+      });
+
+      doc.save(`apoderados_${new Date().getTime()}.pdf`);
+    } catch(err) {
+      Swal.fire({ icon: 'error', title: 'Error', text: "Error exportando PDF: " + err.message });
+    }
+    setLoading(false);
+  };
+
+  const handleExportExcel = async () => {
+    setLoading(true);
+    try {
+      const allDataRes = await fetchGuardiansData({ ...filters, exportAll: true });
+      const exportData = allDataRes.data;
+
+      const rows = exportData.map(g => ({
+        'DNI': g.dni,
+        'Apellidos': `${g.apellido_paterno} ${g.apellido_materno}`,
+        'Nombres': g.nombres,
+        'Parentesco': g.parentesco,
+        'Celular': g.celular || '',
+        'Correo': g.correo || '',
+        'Domicilio': g.domicilio || '',
+        'Estudiantes a Cargo': g.estudiantes ? g.estudiantes.map(e => e.nombres).join(', ') : 'Ninguno'
+      }));
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Apoderados");
+
+      XLSX.writeFile(workbook, `apoderados_${new Date().getTime()}.xlsx`);
+    } catch(err) {
+      Swal.fire({ icon: 'error', title: 'Error', text: "Error exportando Excel: " + err.message });
+    }
+    setLoading(false);
   };
 
   return (
@@ -113,7 +179,9 @@ export default function GuardiansIndexClient() {
                     </td>
                     <td style={{ padding: '10px' }}>
                       <div className="d-flex gap-1" style={{ display: 'flex', gap: '4px' }}>
-                        <button className="btn btn-sm" style={{ background: 'var(--primary)', color: 'white' }} title="Editar"><i className='bx bx-edit'></i></button>
+                        <Link href={`/guardians/create?id=${item.id}`} className="btn btn-sm" style={{ background: 'var(--primary)', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Editar">
+                          <i className='bx bx-edit'></i>
+                        </Link>
                         <button className="btn btn-danger btn-sm" style={{ background: '#dc2626', color: 'white' }} title="Eliminar" onClick={() => handleDelete(item.id)}>
                           <i className='bx bx-trash'></i>
                         </button>
@@ -128,9 +196,14 @@ export default function GuardiansIndexClient() {
       </div>
 
       {!loading && (
-        <div className="mt-4 d-flex justify-between align-center" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem' }}>
+        <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <button onClick={handleExportExcel} className="btn" style={{ background: '#f59e0b', color: 'white' }}><i className='bx bx-spreadsheet'></i> Exportar Excel</button>
+            <button onClick={handleExportPDF} className="btn" style={{ background: '#ef4444', color: 'white' }}><i className='bx bxs-file-pdf'></i> Exportar PDF</button>
+          </div>
+
           <div className="text-muted" style={{ fontSize: '0.9rem' }}>
-            Mostrando {data.from || 0} a {data.to || 0} de {data.total} registros
+            Mostrando {data.from || 0} a {data.to || 0} de {data.total}
           </div>
           <div className="d-flex gap-1" style={{ display: 'flex', gap: '4px' }}>
             {data.links.map((link, idx) => (

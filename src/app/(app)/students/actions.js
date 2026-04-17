@@ -2,6 +2,37 @@
 
 import { query } from '@/lib/db';
 import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+
+const StudentSchema = z.object({
+  id: z.number().int().optional().nullable(),
+  dni: z.string().min(8).max(8).regex(/^\d+$/, "El DNI debe tener 8 números"),
+  apellido_paterno: z.string().min(1, "Apellido paterno requerido"),
+  apellido_materno: z.string().min(1, "Apellido materno requerido"),
+  nombres: z.string().min(1, "Nombres requeridos"),
+  sexo: z.enum(['H', 'M', '']),
+  celular: z.string().regex(/^\d*$/, "Celular inválido").optional().nullable(),
+  email: z.string().email("Correo inválido").or(z.literal('')).optional().nullable(),
+  fecha_nacimiento: z.string().optional().nullable(),
+  departamento_nacimiento: z.string().optional().nullable(),
+  provincia_nacimiento: z.string().optional().nullable(),
+  distrito_nacimiento: z.string().optional().nullable(),
+  domicilio: z.string().optional().nullable(),
+  vive_con: z.string().optional().nullable(),
+  reporte: z.string().optional().nullable(),
+  codigo_estudiante: z.string().optional().nullable(),
+  // Opcionales del formulario de matricula inline
+  anio_id: z.string().or(z.number()).optional().nullable(),
+  seccion_id: z.string().or(z.number()).optional().nullable()
+});
+
+const ApoderadoSchema = z.object({
+  dni: z.string().length(8).regex(/^\d+$/).optional().nullable(),
+  nombres: z.string().optional().nullable(),
+  apellidos: z.string().optional().nullable(),
+  celular: z.string().max(15).optional().nullable()
+});
+
 
 export async function fetchStudentsData(filters) {
   const { search, egresados, anio_id, nivel_id, grado_id, seccion_id, page = 1 } = filters;
@@ -213,12 +244,20 @@ async function syncApoderado(estudianteId, dni, nombres, apellidos, parentesco, 
 
 export async function saveStudent(data) {
   try {
+    // 1. Zod Validation (Sanitizacion y Seguridad)
+    const validateRes = StudentSchema.safeParse(data);
+    if (!validateRes.success) {
+      const errorMsg = validateRes.error.errors.map(e => e.message).join(", ");
+      return { error: `Datos corruptos bloqueados por servidor: ${errorMsg}` };
+    }
+
     const {
-      id, codigo_estudiante, apellido_paterno, apellido_materno, nombres, sexo, dni, celular, email,
+      id, dni, apellido_paterno, apellido_materno, nombres, sexo, celular,
       fecha_nacimiento, departamento_nacimiento, provincia_nacimiento,
-      distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
-      padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular,
-      vive_con, apoderado_alterno_dni, apoderado_alterno_nombres, apoderado_alterno_apellidos, apoderado_alterno_celular,
+      distrito_nacimiento, domicilio, vive_con, reporte, codigo_estudiante, email,
+      padre_dni, padre_nombres, padre_apellidos, padre_celular,
+      madre_dni, madre_nombres, madre_apellidos, madre_celular,
+      apoderado_alterno_dni, apoderado_alterno_nombres, apoderado_alterno_apellidos, apoderado_alterno_celular,
       anio_id, grado_id, seccion_id
     } = data;
 

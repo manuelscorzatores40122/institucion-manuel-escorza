@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Toaster } from 'sonner';
 import Topbar from './Topbar';
 
 export default function DashboardLayoutClient({ user, children }) {
@@ -11,6 +12,7 @@ export default function DashboardLayoutClient({ user, children }) {
 
   return (
     <div className={`dashboard-wrapper ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
+      <Toaster position="bottom-right" richColors />
       {/* Sidebar */}
       <aside className="sidebar" style={{ width: isCollapsed ? '0' : '270px', overflow: 'hidden', transition: 'width 0.3s ease', padding: isCollapsed ? '0' : '' }}>
         <div className="sidebar-header" style={{ opacity: isCollapsed ? 0 : 1, transition: 'opacity 0.2s', whiteSpace: 'nowrap' }}>

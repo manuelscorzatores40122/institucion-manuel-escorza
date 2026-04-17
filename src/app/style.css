@@ -1,4 +1,4 @@
-:root {
+﻿:root {
     --primary: #1e293b;
     --primary-hover: #0f172a;
     --secondary: #2563eb;
@@ -627,4 +627,5 @@ a:hover {
 [data-theme="dark"] .autocomplete-item { border-bottom-color: #334155; color: #f8fafc; }
 [data-theme="dark"] .autocomplete-item:hover { background-color: #334155; color: #60a5fa; }
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #475569; }
-[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }

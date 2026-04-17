@@ -22,9 +22,14 @@ export async function fetchGuardiansData(filters) {
     const countRes = await query(`SELECT COUNT(*) ${baseQuery}`, queryParams);
     const total = parseInt(countRes.rows[0].count, 10);
 
-    const limitIdx = paramIndex++;
-    const offsetIdx = paramIndex++;
-    const dataRes = await query(`SELECT a.* ${baseQuery} ORDER BY id DESC LIMIT $${limitIdx} OFFSET $${offsetIdx}`, [...queryParams, limit, offset]);
+    let dataRes;
+    if (filters.exportAll) {
+      dataRes = await query(`SELECT a.* ${baseQuery} ORDER BY id DESC`, queryParams);
+    } else {
+      const limitIdx = paramIndex++;
+      const offsetIdx = paramIndex++;
+      dataRes = await query(`SELECT a.* ${baseQuery} ORDER BY id DESC LIMIT $${limitIdx} OFFSET $${offsetIdx}`, [...queryParams, limit, offset]);
+    }
 
     // aca lo terminas fernando la logica de  los estudiantes asociados al apoderado
     const data = await Promise.all(dataRes.rows.map(async (g) => {

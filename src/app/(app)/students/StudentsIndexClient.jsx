@@ -341,9 +341,18 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
         )}
 
         {loading && (
-          <div id="tableLoader" className="text-center p-4" style={{ textAlign: 'center', padding: '1rem' }}>
-            <i className='bx bx-loader-alt bx-spin' style={{ fontSize: '2rem', color: 'var(--primary)' }}></i>
-            <p>Cargando datos...</p>
+          <div style={{ padding: '1rem', background: 'white', borderRadius: '8px' }}>
+            {Array(5).fill(0).map((_, i) => (
+              <div key={i} style={{ display: 'flex', gap: '15px', marginBottom: '15px', alignItems: 'center' }}>
+                <div style={{ width: '40px', height: '40px', background: '#f1f5f9', borderRadius: '50%', animation: 'pulse 1.5s infinite ease-in-out' }}></div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ width: '30%', height: '14px', background: '#e2e8f0', borderRadius: '4px', marginBottom: '6px', animation: 'pulse 1.5s infinite ease-in-out' }}></div>
+                  <div style={{ width: '50%', height: '10px', background: '#f1f5f9', borderRadius: '4px', animation: 'pulse 1.5s infinite ease-in-out' }}></div>
+                </div>
+                <div style={{ width: '15%', height: '12px', background: '#e2e8f0', borderRadius: '4px', animation: 'pulse 1.5s infinite ease-in-out' }}></div>
+                <div style={{ width: '15%', height: '30px', background: '#f1f5f9', borderRadius: '8px', animation: 'pulse 1.5s infinite ease-in-out' }}></div>
+              </div>
+            ))}
           </div>
         )}
 

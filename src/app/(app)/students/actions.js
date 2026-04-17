@@ -327,51 +327,56 @@ export async function saveStudent(data) {
 
 
 export async function deleteStudent(id) {
-  await query('DELETE FROM estudiantes WHERE id = $1', [id]);
-  revalidatePath('/students');
-  return { success: true };
+  try {
+    await query('DELETE FROM estudiantes WHERE id = $1', [id]);
+    revalidatePath('/students');
+    return { success: true };
+  } catch (err) {
+    return { error: `No se pudo eliminar el estudiante. Error: ${err.message}` };
+  }
 }
 
 export async function bulkDeleteStudents(studentIds) {
-  if (!studentIds || !studentIds.length) throw new Error('No hay estudiantes seleccionados');
-  // Usar query parametrizada para eliminar multiples IDs (ON DELETE CASCADE eliminará matriculas automáticamente)
-  const idList = studentIds.map(id => parseInt(id)).filter(id => !isNaN(id));
-  if (idList.length > 0) {
-    const placeholders = idList.map((_, i) => `$${i + 1}`).join(',');
-    await query(`DELETE FROM estudiantes WHERE id IN (${placeholders})`, idList);
+  try {
+    if (!studentIds || !studentIds.length) throw new Error('No hay estudiantes seleccionados');
+    // Usar query parametrizada
+    const idList = studentIds.map(id => parseInt(id)).filter(id => !isNaN(id));
+    if (idList.length > 0) {
+      const placeholders = idList.map((_, i) => `$${i + 1}`).join(',');
+      await query(`DELETE FROM estudiantes WHERE id IN (${placeholders})`, idList);
+    }
+    revalidatePath('/students');
+    return { success: true };
+  } catch (err) {
+    return { error: `Error eliminando estudiantes: ${err.message}` };
   }
-  revalidatePath('/students');
-  return { success: true };
 }
 
 export async function bulkEnrollStudents(studentIds, anio_id, grado_id, seccion_id) {
-  if (!studentIds || !studentIds.length) throw new Error('No hay estudiantes seleccionados');
-  if (!anio_id || !grado_id || !seccion_id) throw new Error('Faltan datos de la matrícula (Año, Grado o Sección)');
+  try {
+    if (!studentIds || !studentIds.length) throw new Error('No hay estudiantes seleccionados');
+    if (!anio_id || !grado_id || !seccion_id) throw new Error('Faltan datos de la matrícula (Año, Grado o Sección)');
 
-  for (let id of studentIds) {
-    // Evitar duplicados
-    const exists = await query('SELECT id FROM matriculas WHERE estudiante_id = $1 AND anio_id = $2', [id, anio_id]);
-    if (exists.rows.length === 0) {
-      // Intentar matricular, si algún trigger falla (ej. restricción entre nivel y grado), paramos o seguimos
-      try {
+    for (let id of studentIds) {
+      // Evitar duplicados
+      const exists = await query('SELECT id FROM matriculas WHERE estudiante_id = $1 AND anio_id = $2', [id, anio_id]);
+      if (exists.rows.length === 0) {
         await query(`
           INSERT INTO matriculas (estudiante_id, anio_id, grado_id, seccion_id, fecha_matricula) 
           VALUES ($1, $2, $3, $4, CURRENT_DATE)
         `, [id, anio_id, grado_id, seccion_id]);
-      } catch (err) {
-        throw new Error(`Error al matricular estudiante ID ${id}: ${err.message}`);
+      } else {
+        await query(`
+          UPDATE matriculas SET grado_id = $1, seccion_id = $2, fecha_matricula = CURRENT_DATE
+          WHERE estudiante_id = $3 AND anio_id = $4
+        `, [grado_id, seccion_id, id, anio_id]);
       }
-    } else {
-      // Si ya está matriculado en este año, podríamos actualizarle su matrícula actual en lugar de saltarlo.
-      // O simplemente actualizarlo. Actualizamos:
-      await query(`
-        UPDATE matriculas SET grado_id = $1, seccion_id = $2, fecha_matricula = CURRENT_DATE
-        WHERE estudiante_id = $3 AND anio_id = $4
-      `, [grado_id, seccion_id, id, anio_id]);
     }
-  }
 
-  revalidatePath('/students');
-  revalidatePath('/enrollments');
-  return { success: true };
+    revalidatePath('/students');
+    revalidatePath('/enrollments');
+    return { success: true };
+  } catch (err) {
+    return { error: `Error en matrícula masiva: ${err.message}` };
+  }
 }

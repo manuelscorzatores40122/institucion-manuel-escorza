@@ -286,26 +286,44 @@ export default function CreateStudentClient({ options }) {
                 <input type="email" className="form-control" id="email" name="email" value={formData.email || ''} onChange={handleInputChange} placeholder="ejemplo@escuela.edu.pe" />
               </div>
 
+              <div className="form-group" style={{ gridColumn: 'span 2', background: '#f1f5f9', padding: '10px', borderRadius: '6px', borderLeft: '4px solid var(--primary)' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', margin: 0 }}>
+                  <input type="checkbox" checked={formData.departamento_nacimiento === 'EXTRANJERO'} onChange={(e) => {
+                    const isExt = e.target.checked;
+                    setFormData(prev => ({
+                      ...prev,
+                      departamento_nacimiento: isExt ? 'EXTRANJERO' : '',
+                      provincia_nacimiento: isExt ? 'EXTRANJERO' : '',
+                      distrito_nacimiento: isExt ? 'EXTRANJERO' : ''
+                    }));
+                  }} style={{ width: '18px', height: '18px' }} />
+                  <span style={{ fontWeight: 'bold' }}>Estudiante Extranjero (No nació en Perú)</span>
+                </label>
+              </div>
+
               <div className="form-group">
                 <label className="form-label" htmlFor="departamento_nacimiento">Departamento Nac.</label>
-                <select className="form-control" name="departamento_nacimiento" value={formData.departamento_nacimiento} onChange={handleDeptChange}>
-                  <option value="">-- Seleccione Dpto --</option>
+                <select className="form-control" name="departamento_nacimiento" value={formData.departamento_nacimiento} onChange={handleDeptChange} disabled={formData.departamento_nacimiento === 'EXTRANJERO'}>
+                  <option value="">-- Seleccione --</option>
+                  {formData.departamento_nacimiento === 'EXTRANJERO' && <option value="EXTRANJERO">EXTRANJERO</option>}
                   {departamentos.map(d => <option key={d.id_ubigeo} value={d.nombre_ubigeo}>{d.nombre_ubigeo}</option>)}
                 </select>
               </div>
 
               <div className="form-group">
                 <label className="form-label" htmlFor="provincia_nacimiento">Provincia Nac.</label>
-                <select className="form-control" name="provincia_nacimiento" value={formData.provincia_nacimiento} onChange={handleProvChange} disabled={provincias.length === 0}>
-                  <option value="">-- Seleccione Prov --</option>
+                <select className="form-control" name="provincia_nacimiento" value={formData.provincia_nacimiento} onChange={handleProvChange} disabled={provincias.length === 0 || formData.departamento_nacimiento === 'EXTRANJERO'}>
+                  <option value="">-- Seleccione --</option>
+                  {formData.provincia_nacimiento === 'EXTRANJERO' && <option value="EXTRANJERO">EXTRANJERO</option>}
                   {provincias.map(p => <option key={p.id_ubigeo} value={p.nombre_ubigeo}>{p.nombre_ubigeo}</option>)}
                 </select>
               </div>
 
-              <div className="form-group">
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label className="form-label" htmlFor="distrito_nacimiento">Distrito Nac.</label>
-                <select className="form-control" name="distrito_nacimiento" value={formData.distrito_nacimiento} onChange={handleInputChange} disabled={distritos.length === 0}>
-                  <option value="">-- Seleccione Dist --</option>
+                <select className="form-control" name="distrito_nacimiento" value={formData.distrito_nacimiento} onChange={handleInputChange} disabled={distritos.length === 0 && formData.departamento_nacimiento !== 'EXTRANJERO'}>
+                  <option value="">-- Seleccione --</option>
+                  {formData.distrito_nacimiento === 'EXTRANJERO' && <option value="EXTRANJERO">EXTRANJERO</option>}
                   {distritos.map(d => <option key={d.id_ubigeo} value={d.nombre_ubigeo}>{d.nombre_ubigeo}</option>)}
                 </select>
               </div>

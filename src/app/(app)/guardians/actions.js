@@ -80,47 +80,52 @@ export async function searchGuardianByDni(dni) {
 }
 
 export async function saveGuardian(data) {
-  const {
-    id, dni, apellido_paterno, apellido_materno, nombres, celular, correo,
-    parentesco, vive_con_estudiante, domicilio, estudiante_ids
-  } = data;
+  try {
+    const {
+      id, dni, apellido_paterno, apellido_materno, nombres, celular, correo,
+      parentesco, vive_con_estudiante, domicilio, estudiante_ids
+    } = data;
 
-  let guardianId = id;
+    let guardianId = id;
 
-  if (id) {
-    await query(`
-      UPDATE apoderados SET 
-        apellido_paterno=$1, apellido_materno=$2, nombres=$3, dni=$4, celular=$5, correo=$6,
-        domicilio=$7, parentesco=$8, vive_con_estudiante=$9
-      WHERE id=$10
-    `, [
-      apellido_paterno, apellido_materno, nombres, dni, celular, correo,
-      domicilio, parentesco, vive_con_estudiante ? 1 : 0, id
-    ]);
-  } else {
-    const res = await query(`
-      INSERT INTO apoderados (
+    if (id) {
+      await query(`
+        UPDATE apoderados SET 
+          apellido_paterno=$1, apellido_materno=$2, nombres=$3, dni=$4, celular=$5, correo=$6,
+          domicilio=$7, parentesco=$8, vive_con_estudiante=$9
+        WHERE id=$10
+      `, [
         apellido_paterno, apellido_materno, nombres, dni, celular, correo,
-        domicilio, parentesco, vive_con_estudiante
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9
-      ) RETURNING id
-    `, [
-      apellido_paterno, apellido_materno, nombres, dni, celular, correo,
-      domicilio, parentesco, vive_con_estudiante ? 1 : 0
-    ]);
-    guardianId = res.rows[0].id;
-  }
-
-  if (estudiante_ids) {
-    await query('DELETE FROM estudiante_apoderado WHERE apoderado_id = $1', [guardianId]);
-    for (const est_id of estudiante_ids) {
-      await query(`INSERT INTO estudiante_apoderado (estudiante_id, apoderado_id) VALUES ($1, $2)`, [est_id, guardianId]);
+        domicilio, parentesco, vive_con_estudiante ? 1 : 0, id
+      ]);
+    } else {
+      const res = await query(`
+        INSERT INTO apoderados (
+          apellido_paterno, apellido_materno, nombres, dni, celular, correo,
+          domicilio, parentesco, vive_con_estudiante
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9
+        ) RETURNING id
+      `, [
+        apellido_paterno, apellido_materno, nombres, dni, celular, correo,
+        domicilio, parentesco, vive_con_estudiante ? 1 : 0
+      ]);
+      guardianId = res.rows[0].id;
     }
-  }
 
-  revalidatePath('/guardians');
-  return { success: true };
+    if (estudiante_ids) {
+      await query('DELETE FROM estudiante_apoderado WHERE apoderado_id = $1', [guardianId]);
+      for (const est_id of estudiante_ids) {
+        await query(`INSERT INTO estudiante_apoderado (estudiante_id, apoderado_id) VALUES ($1, $2)`, [est_id, guardianId]);
+      }
+    }
+
+    revalidatePath('/guardians');
+    return { success: true };
+  } catch (error) {
+    console.error('Error in saveGuardian:', error);
+    return { error: `No se pudo guardar el apoderado: ${error.message}` };
+  }
 }
 
 export async function deleteGuardian(id) {

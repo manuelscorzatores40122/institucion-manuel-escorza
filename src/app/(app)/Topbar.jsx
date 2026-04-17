@@ -4,7 +4,21 @@ import { useState, useRef, useEffect } from 'react';
 
 export default function Topbar({ user, isCollapsed, toggleSidebar }) {
   const [isOpen, setIsOpen] = useState(false);
+  const [theme, setTheme] = useState('light');
   const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    setTheme(savedTheme);
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+    document.documentElement.setAttribute('data-theme', newTheme);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -30,7 +44,17 @@ export default function Topbar({ user, isCollapsed, toggleSidebar }) {
           <i className={isCollapsed ? 'bx bx-menu' : 'bx bx-menu-alt-left'} style={{ fontSize: '1.5rem' }}></i>
         </button>
       </div>
-      <div className="dropdown" ref={dropdownRef}>
+      <div className="d-flex align-center gap-3">
+        <button 
+          onClick={toggleTheme}
+          style={{ background: 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '50%', transition: 'background-color 0.2s', color: 'white' }}
+          onMouseOver={e => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
+          onMouseOut={e => e.currentTarget.style.backgroundColor = 'transparent'}
+          title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+        >
+          <i className={theme === 'dark' ? 'bx bx-sun' : 'bx bx-moon'} style={{ fontSize: '1.5rem' }}></i>
+        </button>
+        <div className="dropdown" ref={dropdownRef}>
         <div className="d-flex align-center gap-2" style={{ cursor: 'pointer' }} onClick={() => setIsOpen(!isOpen)}>
           <span className="user-greeting">Hola, <b>{user.nombre_usuario}</b></span>
           <div className="avatar" style={{ width: '36px', height: '36px', background: 'rgba(255,255,255,0.1)', color: 'white', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
@@ -47,6 +71,7 @@ export default function Topbar({ user, isCollapsed, toggleSidebar }) {
             </form>
           </div>
         )}
+      </div>
       </div>
     </header>
   );

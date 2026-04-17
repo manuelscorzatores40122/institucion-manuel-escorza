@@ -188,6 +188,29 @@ export async function toggleEgresadoStatus(id, status) {
   return { success: true };
 }
 
+async function syncApoderado(estudianteId, dni, nombres, apellidos, parentesco, celular) {
+  if (!dni || dni.trim() === '') return;
+  const apExists = await query('SELECT id FROM apoderados WHERE dni = $1', [dni]);
+  let apodId;
+
+  const apes = (apellidos || '').trim().split(' ');
+  const apPaterno = apes[0] || '';
+  const apMaterno = apes.slice(1).join(' ');
+
+  if (apExists.rows.length > 0) {
+    apodId = apExists.rows[0].id;
+    await query('UPDATE apoderados SET nombres = $1, apellido_paterno = $2, apellido_materno = $3, celular = $4, parentesco = $5 WHERE id = $6', [nombres, apPaterno, apMaterno, celular, parentesco, apodId]);
+  } else {
+    const ins = await query('INSERT INTO apoderados (dni, nombres, apellido_paterno, apellido_materno, celular, parentesco) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id', [dni, nombres, apPaterno, apMaterno, celular, parentesco]);
+    apodId = ins.rows[0].id;
+  }
+  
+  const linkExists = await query('SELECT * FROM estudiante_apoderado WHERE estudiante_id = $1 AND apoderado_id = $2', [estudianteId, apodId]);
+  if (linkExists.rows.length === 0) {
+    await query('INSERT INTO estudiante_apoderado (estudiante_id, apoderado_id) VALUES ($1, $2)', [estudianteId, apodId]);
+  }
+}
+
 export async function saveStudent(data) {
   try {
     const {
@@ -250,6 +273,11 @@ export async function saveStudent(data) {
         await query('INSERT INTO matriculas (estudiante_id, grado_id, seccion_id, anio_id, fecha_matricula) VALUES ($1, $2, $3, $4, CURRENT_DATE)', [estudianteId, grado_id, seccion_id, anio_id]);
       }
     }
+
+    // Auto-sync apoderados
+    await syncApoderado(estudianteId, padre_dni, padre_nombres, padre_apellidos, 'padre', padre_celular);
+    await syncApoderado(estudianteId, madre_dni, madre_nombres, madre_apellidos, 'madre', madre_celular);
+    await syncApoderado(estudianteId, apoderado_alterno_dni, apoderado_alterno_nombres, apoderado_alterno_apellidos, 'otro', apoderado_alterno_celular);
 
     revalidatePath('/students');
     return { success: true };

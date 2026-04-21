@@ -14,6 +14,7 @@ export default function GuardiansIndexClient() {
   const [loading, setLoading] = useState(true);
   const [confirmConfig, setConfirmConfig] = useState({ isOpen: false });
   const [filters, setFilters] = useState({ search: '', page: 1 });
+  const [openDropdownId, setOpenDropdownId] = useState(null);
 
   useEffect(() => {
     let debounceTimer = setTimeout(() => {
@@ -60,24 +61,56 @@ export default function GuardiansIndexClient() {
       const exportData = allDataRes.data;
       
       const doc = new jsPDF('landscape');
-      doc.setFontSize(16);
-      doc.text('Directorio Oficial de Apoderados', 14, 20);
-      doc.setFontSize(10);
-      doc.text(`Generado el: ${new Date().toLocaleDateString()}`, 14, 28);
+      
+      const groups = {};
+      exportData.forEach(g => {
+        let grados = [];
+        if (g.estudiantes && g.estudiantes.length > 0) {
+          g.estudiantes.forEach(e => {
+            const gradoName = e.gradoNombre || 'Sin Grado Asignado';
+            if (!grados.includes(gradoName)) grados.push(gradoName);
+          });
+        } else {
+          grados.push('Sin Estudiantes Asignados');
+        }
 
-      autoTable(doc, {
-        startY: 35,
-        head: [['DNI', 'Apellidos y Nombres', 'Teléfono/Celular', 'Correo', 'Casos Asignados', 'Parentesco principal']],
-        body: exportData.map(g => [
-          g.dni,
-          `${g.apellido_paterno} ${g.apellido_materno}, ${g.nombres}`,
-          g.celular || '-',
-          g.correo || '-',
-          g.estudiantes ? g.estudiantes.map(e => e.nombres).join(', ') : 'Ninguno',
-          g.parentesco
-        ]),
-        theme: 'grid',
-        headStyles: { fillColor: [245, 158, 11] } // orange primary
+        grados.forEach(grado => {
+          if (!groups[grado]) groups[grado] = [];
+          groups[grado].push(g);
+        });
+      });
+      const groupKeys = Object.keys(groups).sort();
+
+      if (groupKeys.length === 0) {
+        doc.setFontSize(16);
+        doc.text('Directorio Oficial de Apoderados', 14, 20);
+        doc.setFontSize(10);
+        doc.text(`Generado el: ${new Date().toLocaleDateString()}`, 14, 28);
+        doc.text('No hay datos para exportar.', 14, 38);
+      }
+
+      groupKeys.forEach((grado, idx) => {
+        if (idx > 0) doc.addPage();
+        
+        doc.setFontSize(16);
+        doc.text(`Directorio de Apoderados - ${grado}`, 14, 20);
+        doc.setFontSize(10);
+        doc.text(`Generado el: ${new Date().toLocaleDateString()}`, 14, 28);
+
+        autoTable(doc, {
+          startY: 35,
+          head: [['DNI', 'Apellidos y Nombres', 'Tel/Celular', 'Correo', 'Alumno(s) a Cargo', 'Vínculo']],
+          body: groups[grado].map(g => [
+            g.dni,
+            `${g.apellido_paterno} ${g.apellido_materno}, ${g.nombres}`,
+            g.celular || '-',
+            g.correo || '-',
+            g.estudiantes ? g.estudiantes.map(e => e.nombres).join(', ') : 'Ninguno',
+            g.parentesco ? g.parentesco.replace('_', ' ') : 'Otro'
+          ]),
+          theme: 'grid',
+          headStyles: { fillColor: [15, 118, 110] } // Teal color to match SAAS buttons
+        });
       });
 
       doc.save(`apoderados_${new Date().getTime()}.pdf`);
@@ -119,8 +152,27 @@ export default function GuardiansIndexClient() {
     <div className="card">
       <div className="card-header d-flex justify-between align-center" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <h2 id="mainTitle">Gestión de Familiares y Apoderados</h2>
-        <div className="d-flex gap-2">
-          <Link href="/guardians/create" className="btn btn-primary" style={{ textDecoration: 'none' }}>
+        <div className="d-flex gap-2" style={{ display: 'flex', gap: '0.5rem' }}>
+          <div style={{ position: 'relative' }}>
+            <button 
+              onClick={() => setOpenDropdownId(openDropdownId === 'export' ? null : 'export')} 
+              className="btn btn-sm" 
+              style={{ background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', height: '100%' }}
+            >
+              <i className='bx bx-export'></i> Exportar <i className='bx bx-chevron-down'></i>
+            </button>
+            {openDropdownId === 'export' && (
+              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 100, minWidth: '170px', padding: '0.4rem 0', flexDirection: 'column', display: 'flex', overflow: 'hidden' }}>
+                <button onClick={() => { handleExportExcel(); setOpenDropdownId(null); }} style={{ width: '100%', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', color: '#0f766e', fontSize: '0.85rem', fontWeight: '600' }} onMouseOver={e => e.currentTarget.style.background = '#f0fdf4'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                  <i className='bx bx-spreadsheet' style={{ fontSize: '1.2rem', color: '#10b981' }}></i> Excel (.xlsx)
+                </button>
+                <button onClick={() => { handleExportPDF(); setOpenDropdownId(null); }} style={{ width: '100%', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', color: '#b91c1c', fontSize: '0.85rem', fontWeight: '600' }} onMouseOver={e => e.currentTarget.style.background = '#fef2f2'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                  <i className='bx bxs-file-pdf' style={{ fontSize: '1.2rem', color: '#ef4444' }}></i> PDF Documento
+                </button>
+              </div>
+            )}
+          </div>
+          <Link href="/guardians/create" className="btn btn-primary" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: '600', height: '100%' }}>
             <i className='bx bx-plus'></i> Registrar Apoderado
           </Link>
         </div>
@@ -197,10 +249,7 @@ export default function GuardiansIndexClient() {
 
       {!loading && (
         <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={handleExportExcel} className="btn" style={{ background: '#f59e0b', color: 'white' }}><i className='bx bx-spreadsheet'></i> Exportar Excel</button>
-            <button onClick={handleExportPDF} className="btn" style={{ background: '#ef4444', color: 'white' }}><i className='bx bxs-file-pdf'></i> Exportar PDF</button>
-          </div>
+          <div></div>
 
           <div className="text-muted" style={{ fontSize: '0.9rem' }}>
             Mostrando {data.from || 0} a {data.to || 0} de {data.total}
@@ -222,6 +271,11 @@ export default function GuardiansIndexClient() {
           </div>
         </div>
       )}
+
+      {openDropdownId && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 40 }} onClick={() => setOpenDropdownId(null)}></div>
+      )}
+
       <ConfirmModal {...confirmConfig} />
     </div>
   );

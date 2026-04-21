@@ -6,12 +6,13 @@ import { z } from 'zod';
 
 const StudentSchema = z.object({
   id: z.number().int().optional().nullable(),
-  dni: z.string().min(8).max(8).regex(/^\d+$/, "El DNI debe tener 8 números"),
+  dni: z.string().max(20, "Máximo 20 caracteres").optional().nullable().or(z.literal('')),
   apellido_paterno: z.string().min(1, "Apellido paterno requerido"),
   apellido_materno: z.string().min(1, "Apellido materno requerido"),
   nombres: z.string().min(1, "Nombres requeridos"),
   sexo: z.enum(['H', 'M', '']),
   celular: z.string().regex(/^\d*$/, "Celular inválido").optional().nullable(),
+  celular_secundario: z.string().regex(/^\d*$/, "Celular inválido").optional().nullable(),
   email: z.string().email("Correo inválido").or(z.literal('')).optional().nullable(),
   fecha_nacimiento: z.string().optional().nullable(),
   departamento_nacimiento: z.string().optional().nullable(),
@@ -27,7 +28,7 @@ const StudentSchema = z.object({
 });
 
 const ApoderadoSchema = z.object({
-  dni: z.string().length(8).regex(/^\d+$/).optional().nullable(),
+  dni: z.string().min(6).max(20).optional().nullable(),
   nombres: z.string().optional().nullable(),
   apellidos: z.string().optional().nullable(),
   celular: z.string().max(15).optional().nullable()
@@ -35,13 +36,21 @@ const ApoderadoSchema = z.object({
 
 
 export async function fetchStudentsData(filters) {
-  const { search, egresados, anio_id, nivel_id, grado_id, seccion_id, page = 1 } = filters;
+  const { search, egresados, orphans, anio_id, nivel_id, grado_id, seccion_id, page = 1 } = filters;
   const limit = 10;
   const offset = (page - 1) * limit;
 
   let baseQuery = ' FROM estudiantes WHERE 1=1';
   const queryParams = [];
   let paramIndex = 1;
+
+  if (orphans === '1') {
+    baseQuery += ` AND id NOT IN (SELECT estudiante_id FROM estudiante_apoderado)`;
+  }
+
+  if (filters.incomplete === '1') {
+    baseQuery += ` AND (dni IS NULL OR dni = '' OR fecha_nacimiento IS NULL OR celular IS NULL OR celular = '')`;
+  }
 
   if (egresados) {
     baseQuery += ` AND egresado = $${paramIndex++}`;
@@ -252,7 +261,7 @@ export async function saveStudent(data) {
     }
 
     const {
-      id, dni, apellido_paterno, apellido_materno, nombres, sexo, celular,
+      id, dni, apellido_paterno, apellido_materno, nombres, sexo, celular, celular_secundario,
       fecha_nacimiento, departamento_nacimiento, provincia_nacimiento,
       distrito_nacimiento, domicilio, vive_con, reporte, codigo_estudiante, email,
       padre_dni, padre_nombres, padre_apellidos, padre_celular,
@@ -269,14 +278,14 @@ export async function saveStudent(data) {
     if (id) {
       await query(`
         UPDATE estudiantes SET 
-          codigo_estudiante=$1, apellido_paterno=$2, apellido_materno=$3, nombres=$4, sexo=$5, dni=$6, celular=$7, email=$8,
-          fecha_nacimiento=$9, departamento_nacimiento=$10, provincia_nacimiento=$11,
-          distrito_nacimiento=$12, domicilio=$13, reporte=$14, padre_dni=$15, padre_nombres=$16,
-          padre_apellidos=$17, padre_celular=$18, madre_dni=$19, madre_nombres=$20, madre_apellidos=$21, madre_celular=$22,
-          vive_con=$23, apoderado_alterno_dni=$24, apoderado_alterno_nombres=$25, apoderado_alterno_apellidos=$26, apoderado_alterno_celular=$27
-        WHERE id=$28
+          codigo_estudiante=$1, apellido_paterno=$2, apellido_materno=$3, nombres=$4, sexo=$5, dni=$6, celular=$7, celular_secundario=$8, email=$9,
+          fecha_nacimiento=$10, departamento_nacimiento=$11, provincia_nacimiento=$12,
+          distrito_nacimiento=$13, domicilio=$14, reporte=$15, padre_dni=$16, padre_nombres=$17,
+          padre_apellidos=$18, padre_celular=$19, madre_dni=$20, madre_nombres=$21, madre_apellidos=$22, madre_celular=$23,
+          vive_con=$24, apoderado_alterno_dni=$25, apoderado_alterno_nombres=$26, apoderado_alterno_apellidos=$27, apoderado_alterno_celular=$28
+        WHERE id=$29
       `, [
-        validCodigo, apellido_paterno, apellido_materno, nombres, validSexo, validDni, celular, email,
+        validCodigo, apellido_paterno, apellido_materno, nombres, validSexo, validDni, celular, celular_secundario, email,
         fecha_nacimiento || null, departamento_nacimiento, provincia_nacimiento,
         distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
         padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular,
@@ -285,16 +294,16 @@ export async function saveStudent(data) {
     } else {
       const res = await query(`
         INSERT INTO estudiantes (
-          codigo_estudiante, apellido_paterno, apellido_materno, nombres, sexo, dni, celular, email,
+          codigo_estudiante, apellido_paterno, apellido_materno, nombres, sexo, dni, celular, celular_secundario, email,
           fecha_nacimiento, departamento_nacimiento, provincia_nacimiento,
           distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
           padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular,
           vive_con, apoderado_alterno_dni, apoderado_alterno_nombres, apoderado_alterno_apellidos, apoderado_alterno_celular
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
         ) RETURNING id
       `, [
-        validCodigo, apellido_paterno, apellido_materno, nombres, validSexo, validDni, celular, email,
+        validCodigo, apellido_paterno, apellido_materno, nombres, validSexo, validDni, celular, celular_secundario, email,
         fecha_nacimiento || null, departamento_nacimiento, provincia_nacimiento,
         distrito_nacimiento, domicilio, reporte, padre_dni, padre_nombres,
         padre_apellidos, padre_celular, madre_dni, madre_nombres, madre_apellidos, madre_celular,

@@ -13,7 +13,7 @@ export default function CreateStudentClient({ options }) {
   const { anios, niveles, grados, secciones } = options || { anios: [], niveles: [], grados: [], secciones: [] };
 
   const [formData, setFormData] = useState({
-    id: '', codigo_estudiante: '', dni: '', apellido_paterno: '', apellido_materno: '', nombres: '', sexo: '', celular: '', email: '',
+    id: '', codigo_estudiante: '', dni: '', apellido_paterno: '', apellido_materno: '', nombres: '', sexo: '', celular: '', celular_secundario: '', email: '',
     fecha_nacimiento: '', departamento_nacimiento: '', provincia_nacimiento: '', distrito_nacimiento: '',
     domicilio: '', reporte: '',
     padre_dni: '', padre_celular: '', padre_apellidos: '', padre_nombres: '',
@@ -84,6 +84,7 @@ export default function CreateStudentClient({ options }) {
       nombres: student.nombres || '',
       sexo: student.sexo || '',
       celular: student.celular || '',
+      celular_secundario: student.celular_secundario || '',
       email: student.email || '',
       fecha_nacimiento: student.fecha_nacimiento ? (new Date(student.fecha_nacimiento).toISOString().slice(0, 10)) : '',
       departamento_nacimiento: student.departamento_nacimiento || '',
@@ -221,9 +222,15 @@ export default function CreateStudentClient({ options }) {
           {step === 1 && (
             <>
               <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <label className="form-label" htmlFor="dni">DNI del Estudiante (Autocompleta nombre y apoderados)</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '8px' }}>
+                  <label className="form-label" htmlFor="dni" style={{ marginBottom: 0 }}>DNI del Estudiante (Autocompleta nombre y apoderados)</label>
+                  <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', color: 'var(--primary)', fontWeight: 'bold' }}>
+                    <input type="checkbox" checked={formData.is_foreign_doc || false} onChange={e => setFormData({...formData, is_foreign_doc: e.target.checked})} style={{ width: '16px', height: '16px' }} />
+                    <span>Es Documento Extranjero</span>
+                  </label>
+                </div>
                 <div style={{ position: 'relative' }}>
-                  <input type="text" className="form-control" id="dni" name="dni" required maxLength="8" minLength="8" pattern="\d{8}" autoComplete="off" placeholder="Ingresa DNI exacto de 8 dígitos..." value={formData.dni} onChange={handleInputChange} />
+                  <input type="text" className="form-control" id="dni" name="dni" required={!formData.is_foreign_doc} maxLength={formData.is_foreign_doc ? "20" : "8"} minLength={formData.is_foreign_doc ? undefined : "8"} pattern={formData.is_foreign_doc ? undefined : "\\d{8}"} autoComplete="off" placeholder={formData.is_foreign_doc ? "Deja en blanco si no tiene..." : "Ingresa DNI exacto de 8 dígitos..."} value={formData.dni} onChange={handleInputChange} />
 
                   {suggestions.length > 0 && (
                     <div className="autocomplete-suggestions" style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #ddd', padding: '10px', zIndex: 10 }}>
@@ -277,11 +284,16 @@ export default function CreateStudentClient({ options }) {
           {step === 2 && (
             <>
               <div className="form-group">
-                <label className="form-label" htmlFor="celular">Celular de Emergencia/Estudiante</label>
+                <label className="form-label" htmlFor="celular">Celular de Emergencia/Estudiante 1</label>
                 <input type="text" className="form-control" id="celular" name="celular" maxLength="9" minLength="9" pattern="\d{9}" value={formData.celular || ''} onChange={handleInputChange} placeholder="9 dígitos" />
               </div>
 
               <div className="form-group">
+                <label className="form-label" htmlFor="celular_secundario">Celular de Emergencia/Estudiante 2 (Opcional)</label>
+                <input type="text" className="form-control" id="celular_secundario" name="celular_secundario" maxLength="9" pattern="\d{9}" value={formData.celular_secundario || ''} onChange={handleInputChange} placeholder="Opcional. 9 dígitos" />
+              </div>
+
+              <div className="form-group" style={{ gridColumn: 'span 2' }}>
                 <label className="form-label" htmlFor="email">Correo Institucional / Principal</label>
                 <input type="email" className="form-control" id="email" name="email" value={formData.email || ''} onChange={handleInputChange} placeholder="ejemplo@escuela.edu.pe" />
               </div>
@@ -369,13 +381,23 @@ export default function CreateStudentClient({ options }) {
           {/* STEP 3: Familiares */}
           {step === 3 && (
             <>
-              <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                <h4 style={{ color: 'var(--primary)', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem' }}><i className='bx bx-male'></i> Datos del Padre</h4>
+              <div className="form-group" style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                <h4 style={{ color: 'var(--primary)', margin: 0 }}><i className='bx bx-male'></i> Datos del Padre</h4>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', background: '#e0f2fe', padding: '4px 12px', borderRadius: '20px', border: '1px solid #bae6fd', fontSize: '0.85rem', fontWeight: 'bold', color: '#0369a1' }}>
+                  <input type="checkbox" checked={formData.vive_con === 'Ambos padres' || formData.vive_con === 'Solo Padre'} onChange={(e) => {
+                    const checked = e.target.checked;
+                    const isMadre = formData.vive_con === 'Ambos padres' || formData.vive_con === 'Solo Madre';
+                    if (checked && isMadre) setFormData({...formData, vive_con: 'Ambos padres'});
+                    else if (checked) setFormData({...formData, vive_con: 'Solo Padre'});
+                    else if (isMadre) setFormData({...formData, vive_con: 'Solo Madre'});
+                    else setFormData({...formData, vive_con: ''});
+                  }} style={{ width: '16px', height: '16px' }} /> Vive con el estudiante
+                </label>
               </div>
 
               <div className="form-group">
-                <label className="form-label" htmlFor="padre_dni">DNI del Padre</label>
-                <input type="text" className="form-control" id="padre_dni" name="padre_dni" maxLength="8" minLength="8" pattern="\d{8}" placeholder="Opcional. 8 dígitos" value={formData.padre_dni} onChange={handleInputChange} />
+                <label className="form-label" htmlFor="padre_dni">DNI / Doc. del Padre</label>
+                <input type="text" className="form-control" id="padre_dni" name="padre_dni" maxLength={formData.is_foreign_doc ? "20" : "8"} minLength={formData.is_foreign_doc ? "6" : "8"} pattern={formData.is_foreign_doc ? undefined : "\\d{8}"} placeholder={formData.is_foreign_doc ? "Opcional" : "Opcional. 8 dígitos"} value={formData.padre_dni} onChange={handleInputChange} />
               </div>
 
               <div className="form-group">
@@ -393,13 +415,23 @@ export default function CreateStudentClient({ options }) {
                 <input type="text" className="form-control" id="padre_nombres" name="padre_nombres" value={formData.padre_nombres} onChange={handleInputChange} />
               </div>
 
-              <div className="form-group" style={{ gridColumn: 'span 2', marginTop: '1.5rem' }}>
-                <h4 style={{ color: 'var(--primary)', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem' }}><i className='bx bx-female'></i> Datos de la Madre</h4>
+              <div className="form-group" style={{ gridColumn: 'span 2', marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', borderBottom: '2px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                <h4 style={{ color: 'var(--primary)', margin: 0 }}><i className='bx bx-female'></i> Datos de la Madre</h4>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '5px', cursor: 'pointer', background: '#fce7f3', padding: '4px 12px', borderRadius: '20px', border: '1px solid #fbcfe8', fontSize: '0.85rem', fontWeight: 'bold', color: '#be185d' }}>
+                  <input type="checkbox" checked={formData.vive_con === 'Ambos padres' || formData.vive_con === 'Solo Madre'} onChange={(e) => {
+                    const checked = e.target.checked;
+                    const isPadre = formData.vive_con === 'Ambos padres' || formData.vive_con === 'Solo Padre';
+                    if (checked && isPadre) setFormData({...formData, vive_con: 'Ambos padres'});
+                    else if (checked) setFormData({...formData, vive_con: 'Solo Madre'});
+                    else if (isPadre) setFormData({...formData, vive_con: 'Solo Padre'});
+                    else setFormData({...formData, vive_con: ''});
+                  }} style={{ width: '16px', height: '16px' }} /> Vive con el estudiante
+                </label>
               </div>
 
               <div className="form-group">
-                <label className="form-label" htmlFor="madre_dni">DNI de la Madre</label>
-                <input type="text" className="form-control" id="madre_dni" name="madre_dni" maxLength="8" minLength="8" pattern="\d{8}" placeholder="Opcional. 8 dígitos" value={formData.madre_dni} onChange={handleInputChange} />
+                <label className="form-label" htmlFor="madre_dni">DNI / Doc. de la Madre</label>
+                <input type="text" className="form-control" id="madre_dni" name="madre_dni" maxLength={formData.is_foreign_doc ? "20" : "8"} minLength={formData.is_foreign_doc ? "6" : "8"} pattern={formData.is_foreign_doc ? undefined : "\\d{8}"} placeholder={formData.is_foreign_doc ? "Opcional" : "Opcional. 8 dígitos"} value={formData.madre_dni} onChange={handleInputChange} />
               </div>
 
               <div className="form-group">
@@ -422,8 +454,8 @@ export default function CreateStudentClient({ options }) {
               </div>
 
               <div className="form-group">
-                <label className="form-label" htmlFor="apoderado_alterno_dni">DNI Apoderado</label>
-                <input type="text" className="form-control" id="apoderado_alterno_dni" name="apoderado_alterno_dni" maxLength="8" minLength="8" pattern="\d{8}" placeholder="Opcional." value={formData.apoderado_alterno_dni || ''} onChange={handleInputChange} />
+                <label className="form-label" htmlFor="apoderado_alterno_dni">DNI / Doc. Apoderado</label>
+                <input type="text" className="form-control" id="apoderado_alterno_dni" name="apoderado_alterno_dni" maxLength={formData.is_foreign_doc ? "20" : "8"} minLength={formData.is_foreign_doc ? "6" : "8"} pattern={formData.is_foreign_doc ? undefined : "\\d{8}"} placeholder={formData.is_foreign_doc ? "Opcional" : "Opcional. 8 dígitos"} value={formData.apoderado_alterno_dni || ''} onChange={handleInputChange} />
               </div>
 
               <div className="form-group">

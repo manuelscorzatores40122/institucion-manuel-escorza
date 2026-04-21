@@ -1,14 +1,43 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Toaster } from 'sonner';
 import Topbar from './Topbar';
 
 export default function DashboardLayoutClient({ user, children }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+  const timeoutRef = useRef(null);
+
+  const handleAutoLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      router.push('/login');
+    } catch (e) {
+      router.push('/login');
+    }
+  };
+
+  useEffect(() => {
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
+    
+    const resetTimeout = () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      // 15 minutos en milisegundos = 15 * 60 * 1000 = 900000
+      timeoutRef.current = setTimeout(handleAutoLogout, 900000);
+    };
+
+    resetTimeout();
+    events.forEach(event => window.addEventListener(event, resetTimeout));
+
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      events.forEach(event => window.removeEventListener(event, resetTimeout));
+    };
+  }, []);
 
   return (
     <div className={`dashboard-wrapper ${isCollapsed ? 'sidebar-collapsed' : ''}`}>

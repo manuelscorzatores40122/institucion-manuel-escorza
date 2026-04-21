@@ -23,14 +23,28 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
   const [filters, setFilters] = useState({
     search: '',
     egresados: '0',
+    orphans: '0',
     anio_id: '',
     nivel_id: '',
     grado_id: '',
     seccion_id: '',
-    page: 1
+    page: 1,
+    incomplete: '0'
   });
 
   const { anios, niveles, grados, secciones } = initialFiltersParams;
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('orphans') === '1') {
+        setFilters(p => ({...p, orphans: '1'}));
+      }
+      if (params.get('incomplete') === '1') {
+        setFilters(p => ({...p, incomplete: '1'}));
+      }
+    }
+  }, []);
 
   useEffect(() => {
     let debounceTimer = setTimeout(() => {
@@ -195,24 +209,43 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
       const doc = new jsPDF('landscape');
       const title = generateExportTitle();
 
-      doc.setFontSize(16);
-      doc.text(title, 14, 20);
-      doc.setFontSize(10);
-      doc.text(`Generado el: ${new Date().toLocaleDateString()}`, 14, 28);
+      const groups = {};
+      exportData.forEach(st => {
+        const grado = st.gradoActual || 'Sin Grado Asignado';
+        if (!groups[grado]) groups[grado] = [];
+        groups[grado].push(st);
+      });
+      const groupKeys = Object.keys(groups).sort();
 
-      // AutoTable
-      autoTable(doc, {
-        startY: 35,
-        head: [['DNI', 'Apellidos y Nombres', 'Celular', 'Apoderados (Nombre)', 'Matrícula (Referencial)']],
-        body: exportData.map(st => [
-          st.dni,
-          `${st.apellido_paterno} ${st.apellido_materno}, ${st.nombres}`,
-          st.celular || 'N/A',
-          (st.padre_nombres || st.madre_nombres) ? `${st.padre_nombres || ''} / ${st.madre_nombres || ''}` : 'No',
-          st.gradoActual || 'Sin matricular'
-        ]),
-        theme: 'grid',
-        headStyles: { fillColor: [16, 185, 129] } // verde primary
+      if (groupKeys.length === 0) {
+        doc.setFontSize(16);
+        doc.text(title, 14, 20);
+        doc.setFontSize(10);
+        doc.text(`Generado el: ${new Date().toLocaleDateString()}`, 14, 28);
+        doc.text('No hay datos para exportar.', 14, 38);
+      }
+
+      groupKeys.forEach((grado, idx) => {
+        if (idx > 0) doc.addPage();
+        
+        doc.setFontSize(16);
+        doc.text(`${title} - ${grado}`, 14, 20);
+        doc.setFontSize(10);
+        doc.text(`Generado el: ${new Date().toLocaleDateString()}`, 14, 28);
+
+        autoTable(doc, {
+          startY: 35,
+          head: [['DNI', 'Apellidos y Nombres', 'Celular', 'Apoderados (Nombre)', 'Matrícula (Referencial)']],
+          body: groups[grado].map(st => [
+            st.dni,
+            `${st.apellido_paterno} ${st.apellido_materno}, ${st.nombres}`,
+            st.celular || 'N/A',
+            (st.padre_nombres || st.madre_nombres) ? `${st.padre_nombres || ''} / ${st.madre_nombres || ''}` : 'No',
+            st.gradoActual || 'Sin matricular'
+          ]),
+          theme: 'grid',
+          headStyles: { fillColor: [16, 185, 129] } // verde primary
+        });
       });
 
       doc.save(`${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`);
@@ -267,8 +300,29 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
             </button>
           )}
           <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            
+            <div style={{ position: 'relative' }}>
+              <button 
+                onClick={() => setOpenDropdownId(openDropdownId === 'export' ? null : 'export')} 
+                className="btn btn-sm" 
+                style={{ background: '#f8fafc', color: '#334155', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '600', height: '100%' }}
+              >
+                <i className='bx bx-export'></i> Exportar <i className='bx bx-chevron-down'></i>
+              </button>
+              {openDropdownId === 'export' && (
+                <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '8px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', zIndex: 100, minWidth: '170px', padding: '0.4rem 0', flexDirection: 'column', display: 'flex', overflow: 'hidden' }}>
+                  <button onClick={() => { handleExportExcel(); setOpenDropdownId(null); }} style={{ width: '100%', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', color: '#0f766e', fontSize: '0.85rem', fontWeight: '600' }} onMouseOver={e => e.currentTarget.style.background = '#f0fdf4'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                    <i className='bx bx-spreadsheet' style={{ fontSize: '1.2rem', color: '#10b981' }}></i> Excel (.xlsx)
+                  </button>
+                  <button onClick={() => { handleExportPDF(); setOpenDropdownId(null); }} style={{ width: '100%', padding: '0.6rem 1rem', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', background: 'transparent', cursor: 'pointer', textAlign: 'left', color: '#b91c1c', fontSize: '0.85rem', fontWeight: '600' }} onMouseOver={e => e.currentTarget.style.background = '#fef2f2'} onMouseOut={e => e.currentTarget.style.background = 'transparent'}>
+                    <i className='bx bxs-file-pdf' style={{ fontSize: '1.2rem', color: '#ef4444' }}></i> PDF Documento
+                  </button>
+                </div>
+              )}
+            </div>
+
             {!isEgresadosView && (
-              <Link href="/students/create" className="btn btn-sm btn-primary" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <Link href="/students/create" className="btn btn-sm btn-primary" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '5px', fontWeight: '600', height: '100%' }}>
                 <i className='bx bx-plus'></i> Nuevo
               </Link>
             )}
@@ -281,6 +335,28 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
           <div className="form-group mb-0" style={{ gridColumn: '1 / -1' }}>
             <label className="form-label"><i className='bx bx-search'></i> Búsqueda por texto</label>
             <input type="text" name="search" className="form-control" placeholder="Buscar por DNI, Cód. Estudiante, Nombres, Apellidos" value={filters.search} onChange={handleFilterChange} autoComplete="off" />
+            {filters.orphans === '1' && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', background: '#fee2e2', color: '#991b1b', padding: '4px 10px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: '600' }}>
+                  <i className='bx bx-error' style={{ marginRight: '4px' }}></i> Filtrando: Sin Apoderado
+                  <i className='bx bx-x' style={{ marginLeft: '6px', cursor: 'pointer', fontSize: '1.2rem' }} onClick={() => {
+                    setFilters(p => ({...p, orphans: '0'}));
+                    window.history.replaceState({}, '', window.location.pathname);
+                  }}></i>
+                </span>
+              </div>
+            )}
+            {filters.incomplete === '1' && (
+              <div style={{ marginTop: '0.5rem' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', background: '#fef3c7', color: '#b45309', padding: '4px 10px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: '600' }}>
+                  <i className='bx bx-file-blank' style={{ marginRight: '4px' }}></i> Filtrando: Falta Documentos
+                  <i className='bx bx-x' style={{ marginLeft: '6px', cursor: 'pointer', fontSize: '1.2rem' }} onClick={() => {
+                    setFilters(p => ({...p, incomplete: '0'}));
+                    window.history.replaceState({}, '', window.location.pathname);
+                  }}></i>
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="form-group mb-0">
@@ -439,10 +515,7 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
       {!loading && (
         <div style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={handleExportExcel} className="btn" style={{ background: '#10b981', color: 'white' }}><i className='bx bx-spreadsheet'></i> Exportar Excel</button>
-            <button onClick={handleExportPDF} className="btn" style={{ background: '#ef4444', color: 'white' }}><i className='bx bxs-file-pdf'></i> Exportar PDF</button>
-          </div>
+          <div></div>
 
           <div style={{ textAlign: 'center', color: '#64748b' }}>
             Mostrando {studentsData.from || 0} a {studentsData.to || 0} de {studentsData.total}
@@ -466,210 +539,220 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
         </div>
       )}
 
-      {/* MODAL PERFIL ALUMNO */}
+                  {/* MODAL PERFIL ESTUDIANTE - MODERN SAAS */}
       {selectedStudent && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(5px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100000, padding: '1rem' }}>
-          <div style={{ background: 'white', padding: '0', borderRadius: '16px', maxWidth: '600px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
-
-            {/* Cabecera del Modal */}
-            <div style={{ background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', padding: '1.5rem', position: 'relative', color: 'white' }}>
-              <button onClick={() => setSelectedStudent(null)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'rgba(255,255,255,0.2)', border: 'none', width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'white', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.4)'} onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}>
-                <i className='bx bx-x' style={{ fontSize: '1.2rem' }}></i>
-              </button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'white', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-                  <i className='bx bxs-user'></i>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100000, padding: '2rem', animation: 'fadeIn 0.2s ease-out' }}>
+          <div style={{ background: '#ffffff', borderRadius: '12px', maxWidth: '850px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }}>
+            
+            {/* Header Vívido pero Profesional */}
+            <div style={{ background: 'linear-gradient(to right, #1e3a8a, #3b82f6)', padding: '24px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'white' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold', border: '2px solid rgba(255,255,255,0.4)', backdropFilter: 'blur(4px)' }}>
+                  {selectedStudent.nombres.charAt(0)}{selectedStudent.apellido_paterno.charAt(0)}
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '600' }}>{selectedStudent.nombres}</h3>
-                  <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '1.05rem' }}>{selectedStudent.apellido_paterno} {selectedStudent.apellido_materno}</p>
+                  <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '700', letterSpacing: '0.01em' }}>{selectedStudent.apellido_paterno} {selectedStudent.apellido_materno}, {selectedStudent.nombres}</h2>
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '0.85rem', fontWeight: '500', opacity: 0.9 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><i className='bx bx-id-card'></i> {selectedStudent.dni || 'Sin Documento'}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><i className='bx bx-purchase-tag'></i> Cód: {selectedStudent.codigo_estudiante || 'N/A'}</span>
+                  </div>
                 </div>
               </div>
+              <button onClick={() => setSelectedStudent(null)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', width: '36px', height: '36px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: '0.2s' }} onMouseOver={e=>e.currentTarget.style.backgroundColor='rgba(255,255,255,0.2)'} onMouseOut={e=>e.currentTarget.style.backgroundColor='rgba(255,255,255,0.1)'} title="Cerrar"><i className='bx bx-x' style={{ fontSize: '1.4rem' }}></i></button>
             </div>
 
-            {/* Contenido Scrolleable */}
-            <div style={{ padding: '1.5rem', overflowY: 'auto' }}>
-
-              {/* Sección: Datos Personales */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h4 style={{ color: '#334155', borderBottom: '2px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 1rem 0' }}>
-                  <i className='bx bx-id-card' style={{ color: '#3b82f6' }}></i> Información Personal
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.95rem' }}>
-                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>DNI</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.dni || 'Extranjero (Sin Doc)'}</div></div>
-                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Edad</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{getEdad(selectedStudent.fecha_nacimiento)}</div></div>
-                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Sexo</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.sexo === 'H' ? 'Hombre' : selectedStudent.sexo === 'M' ? 'Mujer' : selectedStudent.sexo || 'No registrado'}</div></div>
-                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Celular</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.celular || 'No registrado'}</div></div>
-                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', gridColumn: 'span 2' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Lugar de Nacimiento</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.departamento_nacimiento ? `${selectedStudent.departamento_nacimiento} - ${selectedStudent.provincia_nacimiento} - ${selectedStudent.distrito_nacimiento}` : 'No especificado'}</div></div>
-                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px', gridColumn: 'span 2' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Domicilio</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.domicilio || 'No especificado'}</div></div>
-                </div>
-              </div>
-
-              {/* Sección: Datos Académicos */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h4 style={{ color: '#334155', borderBottom: '2px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 1rem 0' }}>
-                  <i className='bx bx-book-open' style={{ color: '#8b5cf6' }}></i> Información Académica
-                </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '0.95rem' }}>
-                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Cód. Estudiantil</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.codigo_estudiante || 'No asignado'}</div></div>
-                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Estado Matrícula</span> <div style={{ fontWeight: '600', color: '#0f172a' }}><span style={{ display: 'inline-block', padding: '2px 8px', background: '#dcfce7', color: '#166534', borderRadius: '12px', fontSize: '0.85rem' }}>{selectedStudent.estado_matricula || 'No registrada'}</span></div></div>
-                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Grado Actual</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.gradoNombre || 'No asignado'}</div></div>
-                  <div style={{ background: '#f8fafc', padding: '10px 12px', borderRadius: '8px' }}><span style={{ color: '#64748b', display: 'block', fontSize: '0.8rem', fontWeight: '500', marginBottom: '4px' }}>Tipo Vacante</span> <div style={{ fontWeight: '600', color: '#0f172a' }}>{selectedStudent.tipo_vacante || 'No especificado'}</div></div>
-                </div>
-              </div>
-
-              {/* Sección: Apoderados */}
-              <div style={{ marginBottom: '1.5rem' }}>
-                <h4 style={{ color: '#334155', borderBottom: '2px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '8px', margin: '0 0 1rem 0', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><i className='bx bx-group' style={{ color: '#f59e0b' }}></i> Apoderados</div>
-                  <button onClick={() => setShowGuardiansProfile(true)} className="btn btn-sm" style={{ background: '#f8fafc', color: '#3b82f6', border: '1px solid #cbd5e1', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '0.8rem', padding: '4px 8px', borderRadius: '6px', cursor: 'pointer' }}>
-                    <i className='bx bx-window-open'></i> Ver Perfil Completo
-                  </button>
-                </h4>
-                {selectedStudent.vive_con && (
-                  <div style={{ background: '#fef3c7', padding: '8px 15px', borderRadius: '8px', marginBottom: '10px', fontSize: '0.9rem', color: '#92400e', fontWeight: '500', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-                    <i className='bx bx-home-heart'></i> Vive con: {selectedStudent.vive_con}
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f8fafc', padding: '10px 15px', borderRadius: '8px' }}>
-                    <div style={{ width: '35px', height: '35px', borderRadius: '50%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}><i className='bx bx-male'></i></div>
+            {/* Content Body */}
+            <div style={{ overflowY: 'auto', flex: 1, padding: '32px', background: '#f8fafc' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                
+                {/* Panel 1: Datos Personales */}
+                <div style={{ background: '#ffffff', borderRadius: '10px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ background: '#e0f2fe', color: '#0369a1', padding: '6px', borderRadius: '6px', display: 'flex' }}><i className='bx bx-user'></i></div>
+                    Información Personal
+                  </h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
                     <div>
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '500' }}>Padre</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '500', color: '#0f172a' }}>{selectedStudent.padre_nombres ? `${selectedStudent.padre_nombres} ${selectedStudent.padre_apellidos || ''}` : 'No especificado'}</div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Edad</label>
+                      <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{getEdad(selectedStudent.fecha_nacimiento)}</div>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Género</label>
+                      <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{selectedStudent.sexo === 'H' ? 'Masculino' : selectedStudent.sexo === 'M' ? 'Femenino' : selectedStudent.sexo || '-'}</div>
+                    </div>
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Celular / Contacto</label>
+                      <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{selectedStudent.celular || '-'}{selectedStudent.celular_secundario ? ` / ${selectedStudent.celular_secundario}` : ''}</div>
+                    </div>
+                    <div style={{ gridColumn: 'span 3' }}>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Lugar de Nacimiento</label>
+                      <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{selectedStudent.departamento_nacimiento ? `${selectedStudent.departamento_nacimiento} / ${selectedStudent.provincia_nacimiento} / ${selectedStudent.distrito_nacimiento}` : '-'}</div>
+                    </div>
+                    <div style={{ gridColumn: 'span 3' }}>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Dirección Domiciliaria</label>
+                      <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{selectedStudent.domicilio || '-'}</div>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f8fafc', padding: '10px 15px', borderRadius: '8px' }}>
-                    <div style={{ width: '35px', height: '35px', borderRadius: '50%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569' }}><i className='bx bx-female'></i></div>
-                    <div>
-                      <div style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: '500' }}>Madre</div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: '500', color: '#0f172a' }}>{selectedStudent.madre_nombres ? `${selectedStudent.madre_nombres} ${selectedStudent.madre_apellidos || ''}` : 'No especificada'}</div>
-                    </div>
-                  </div>
-                  {selectedStudent.apoderado_alterno_nombres && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#f8fafc', padding: '10px 15px', borderRadius: '8px', borderLeft: '3px solid #10b981' }}>
-                      <div style={{ width: '35px', height: '35px', borderRadius: '50%', background: '#d1fae5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}><i className='bx bx-user-pin'></i></div>
+                </div>
+
+                {/* Grid para Panel Académico & Apoderados Resumen */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px' }}>
+                  
+                  {/* Académico */}
+                  <div style={{ background: '#ffffff', borderRadius: '10px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                    <h3 style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ background: '#f3e8ff', color: '#7e22ce', padding: '6px', borderRadius: '6px', display: 'flex' }}><i className='bx bx-book-open'></i></div>
+                      Perfil Académico
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       <div>
-                        <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: '500' }}>Apoderado Alterno / Extra</div>
-                        <div style={{ fontSize: '0.95rem', fontWeight: '500', color: '#0f172a' }}>{selectedStudent.apoderado_alterno_nombres} {selectedStudent.apoderado_alterno_apellidos}</div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Estado Matrícula</label>
+                        <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: '600', display: 'inline-block' }}>{selectedStudent.estado_matricula || 'No registrada'}</span>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Grado Asignado</label>
+                        <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{selectedStudent.gradoNombre || 'Sin asignar'}</div>
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Tipo de Vacante / Beneficio</label>
+                        <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{selectedStudent.tipo_vacante || '-'}</div>
                       </div>
                     </div>
-                  )}
-                </div>
-              </div>
+                  </div>
 
-              {/* Sección: Médico */}
-              {(selectedStudent.reporte) ? (
-                <div style={{ background: '#fffbeb', borderLeft: '4px solid #f59e0b', padding: '15px', borderRadius: '0 8px 8px 0', color: '#92400e' }}>
-                  <p style={{ margin: '0 0 5px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '5px' }}><i className='bx bx-plus-medical'></i> Reporte Médico / observaciones</p>
-                  <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: '1.5' }}>{selectedStudent.reporte}</p>
+                  {/* Familia */}
+                  <div style={{ background: '#ffffff', borderRadius: '10px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' }}>
+                    <h3 style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ background: '#ffedd5', color: '#c2410c', padding: '6px', borderRadius: '6px', display: 'flex' }}><i className='bx bx-group'></i></div>
+                        Familiares
+                      </div>
+                      <button onClick={() => setShowGuardiansProfile(true)} style={{ background: '#f1f5f9', color: '#3b82f6', border: 'none', padding: '4px 12px', borderRadius: '20px', fontSize: '0.75rem', fontWeight: '600', cursor: 'pointer', transition: '0.2s' }} onMouseOver={e=>e.currentTarget.style.background='#e0f2fe'} onMouseOut={e=>e.currentTarget.style.background='#f1f5f9'}>Ver Detalles</button>
+                    </h3>
+                    <div style={{ marginBottom: '16px' }}>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Ampliación Familiar</label>
+                      <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{selectedStudent.vive_con ? `Vive con: ${selectedStudent.vive_con}` : 'No especificado'}</div>
+                    </div>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {selectedStudent.apoderadosList && selectedStudent.apoderadosList.length > 0 ? selectedStudent.apoderadosList.slice(0, 3).map(apod => (
+                        <div key={apod.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
+                          <i className='bx bx-check-circle' style={{ color: '#10b981' }}></i>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '0.85rem', color: '#0f172a', fontWeight: '600' }}>{[apod.apellido_paterno, apod.nombres].filter(Boolean).join(' ')}</div>
+                            <div style={{ fontSize: '0.7rem', color: '#64748b', textTransform: 'capitalize' }}>{apod.parentesco ? apod.parentesco.replace('_', ' ') : '-'}</div>
+                          </div>
+                        </div>
+                      )) : (
+                        <div style={{ textAlign: 'center', padding: '10px', color: '#94a3b8', fontSize: '0.85rem', fontStyle: 'italic' }}>Sin apoderados.</div>
+                      )}
+                    </div>
+                  </div>
+
                 </div>
-              ) : (
-                <div style={{ background: '#f1f5f9', borderLeft: '4px solid #cbd5e1', padding: '15px', borderRadius: '0 8px 8px 0', color: '#475569' }}>
-                  <p style={{ margin: '0 0 5px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '5px' }}><i className='bx bx-info-circle'></i> Reporte Médico / observaciones</p>
-                  <p style={{ margin: 0, fontSize: '0.95rem', fontStyle: 'italic' }}>Este estudiante no presenta observaciones médicas ni conductuales registradas.</p>
+
+                {/* Panel Observaciones */}
+                <div style={{ background: '#fffbeb', borderRadius: '10px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #fde68a' }}>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: '700', color: '#92400e', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+                    <div style={{ background: '#fef3c7', color: '#b45309', padding: '6px', borderRadius: '6px', display: 'flex' }}><i className='bx bx-plus-medical'></i></div>
+                    Control Médico y Comentarios
+                  </h3>
+                  <div style={{ fontSize: '0.9rem', color: '#92400e', lineHeight: '1.5' }}>
+                    {selectedStudent.reporte ? selectedStudent.reporte : <span style={{ opacity: 0.7 }}>Ninguna observación conductual o médica ha sido anexada.</span>}
+                  </div>
                 </div>
-              )}
+
+              </div>
             </div>
 
-            {/* Pie del modal */}
-            <div style={{ padding: '1rem 1.5rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setSelectedStudent(null)} className="btn" style={{ background: '#0f172a', color: 'white', padding: '0.6rem 1.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', border: 'none' }}>Cerrar Tarjeta</button>
+            {/* Footer */}
+            <div style={{ padding: '16px 32px', background: '#ffffff', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}>
+              <button onClick={() => setSelectedStudent(null)} className="btn hover:bg-gray-100" style={{ background: 'transparent', color: '#475569', border: '1px solid #cbd5e1', fontWeight: '600', padding: '8px 24px', borderRadius: '8px' }}>Cerrar</button>
             </div>
           </div>
         </div>
       )}
 
-
-
-      {/* MODAL PERFIL APODERADOS */}
+      {/* MODAL PERFIL APODERADOS - MODERN SAAS */}
       {showGuardiansProfile && selectedStudent && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(15, 23, 42, 0.7)', backdropFilter: 'blur(5px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100005, padding: '1rem' }}>
-          <div style={{ background: 'white', padding: '0', borderRadius: '16px', maxWidth: '700px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)', overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
-            <div style={{ background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)', padding: '1.5rem', position: 'relative', color: 'white' }}>
-              <button onClick={() => setShowGuardiansProfile(false)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'rgba(255,255,255,0.2)', border: 'none', width: '30px', height: '30px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'white', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.4)'} onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}>
-                <i className='bx bx-x' style={{ fontSize: '1.2rem' }}></i>
-              </button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                <div style={{ width: '60px', height: '60px', borderRadius: '50%', background: 'white', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2.5rem', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}>
-                  <i className='bx bx-group'></i>
-                </div>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '600' }}>Perfil de Apoderados</h3>
-                  <p style={{ margin: '4px 0 0 0', opacity: 0.9, fontSize: '1.05rem' }}>Estudiante: {selectedStudent.nombres} {selectedStudent.apellido_paterno}</p>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100005, padding: '2rem', animation: 'fadeIn 0.2s ease-out' }}>
+          <div style={{ background: '#ffffff', borderRadius: '12px', maxWidth: '850px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }}>
+            
+            {/* Header Vívido pero Profesional */}
+            <div style={{ background: 'linear-gradient(to right, #0f766e, #14b8a6)', padding: '24px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'white' }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '700', letterSpacing: '0.01em', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.2)', padding: '8px', borderRadius: '8px', display: 'flex' }}><i className='bx bx-group'></i></div>
+                  Contactos de Emergencia y Titulares
+                </h2>
+                <div style={{ marginTop: '6px', fontSize: '0.9rem', fontWeight: '500', opacity: 0.9 }}>
+                   Asociados al alumno: <b>{selectedStudent.apellido_paterno} {selectedStudent.nombres}</b>
                 </div>
               </div>
+              <button onClick={() => setShowGuardiansProfile(false)} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', width: '36px', height: '36px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: '0.2s' }} onMouseOver={e=>e.currentTarget.style.backgroundColor='rgba(255,255,255,0.2)'} onMouseOut={e=>e.currentTarget.style.backgroundColor='rgba(255,255,255,0.1)'} title="Cerrar"><i className='bx bx-x' style={{ fontSize: '1.4rem' }}></i></button>
             </div>
 
-            <div style={{ padding: '1.5rem', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-              {/* Info Padre */}
-              <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-                <div style={{ background: '#f8fafc', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px', color: '#1e293b', fontWeight: '600' }}>
-                  <i className='bx bx-male' style={{ fontSize: '1.2rem', color: '#3b82f6' }}></i> Información del Padre
-                </div>
-                <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>DNI</span><div style={{ fontWeight: '500' }}>{selectedStudent.padre_dni || 'No registrado'}</div></div>
-                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Nombres</span><div style={{ fontWeight: '500' }}>{selectedStudent.padre_nombres || 'No registrado'}</div></div>
-                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Apellidos</span><div style={{ fontWeight: '500' }}>{selectedStudent.padre_apellidos || 'No registrado'}</div></div>
-                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Celular</span><div style={{ fontWeight: '500', color: selectedStudent.padre_celular ? '#2563eb' : 'inherit' }}>{selectedStudent.padre_celular ? <><i className='bx bx-phone' ></i> {selectedStudent.padre_celular}</> : 'No registrado'}</div></div>
-                </div>
-              </div>
-
-              {/* Info Madre */}
-              <div style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-                <div style={{ background: '#f8fafc', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px', color: '#1e293b', fontWeight: '600' }}>
-                  <i className='bx bx-female' style={{ fontSize: '1.2rem', color: '#ec4899' }}></i> Información de la Madre
-                </div>
-                <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>DNI</span><div style={{ fontWeight: '500' }}>{selectedStudent.madre_dni || 'No registrado'}</div></div>
-                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Nombres</span><div style={{ fontWeight: '500' }}>{selectedStudent.madre_nombres || 'No registrado'}</div></div>
-                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Apellidos</span><div style={{ fontWeight: '500' }}>{selectedStudent.madre_apellidos || 'No registrado'}</div></div>
-                  <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Celular</span><div style={{ fontWeight: '500', color: selectedStudent.madre_celular ? '#2563eb' : 'inherit' }}>{selectedStudent.madre_celular ? <><i className='bx bx-phone' ></i> {selectedStudent.madre_celular}</> : 'No registrado'}</div></div>
-                </div>
-              </div>
-
-              {/* Info Apoderado Alterno */}
-              {selectedStudent.apoderado_alterno_nombres && (
-                <div style={{ border: '1px solid #10b981', borderRadius: '12px', overflow: 'hidden' }}>
-                  <div style={{ background: '#ecfdf5', padding: '12px 16px', borderBottom: '1px solid #10b981', display: 'flex', alignItems: 'center', gap: '10px', color: '#065f46', fontWeight: '600' }}>
-                    <i className='bx bx-user-pin' style={{ fontSize: '1.2rem', color: '#059669' }}></i> Información de Apoderado Alterno
-                  </div>
-                  <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                    <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>DNI</span><div style={{ fontWeight: '500' }}>{selectedStudent.apoderado_alterno_dni || 'No registrado'}</div></div>
-                    <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Nombres</span><div style={{ fontWeight: '500' }}>{selectedStudent.apoderado_alterno_nombres || 'No registrado'}</div></div>
-                    <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Apellidos</span><div style={{ fontWeight: '500' }}>{selectedStudent.apoderado_alterno_apellidos || 'No registrado'}</div></div>
-                    <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Celular</span><div style={{ fontWeight: '500', color: selectedStudent.apoderado_alterno_celular ? '#2563eb' : 'inherit' }}>{selectedStudent.apoderado_alterno_celular ? <><i className='bx bx-phone' ></i> {selectedStudent.apoderado_alterno_celular}</> : 'No registrado'}</div></div>
-                  </div>
-                </div>
-              )}
-
-              {/* Info Apoderados Adicionales */}
-              {selectedStudent.apoderadosList && selectedStudent.apoderadosList.length > 0 && (
-                <>
-                  <h4 style={{ color: '#334155', borderBottom: '2px solid #f1f5f9', paddingBottom: '0.5rem', marginBottom: '0.5rem', marginTop: '1rem' }}>
-                    <i className='bx bx-group' style={{ color: '#f59e0b' }}></i> Apoderados Vinculados Oficialmente
-                  </h4>
-                  {selectedStudent.apoderadosList.map(apod => (
-                    <div key={apod.id} style={{ border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
-                      <div style={{ background: '#f8fafc', padding: '12px 16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '10px', color: '#1e293b', fontWeight: '600', textTransform: 'capitalize' }}>
-                        <i className='bx bx-user-pin' style={{ fontSize: '1.2rem', color: '#10b981' }}></i> {apod.parentesco.replace('_', ' ')}
+            {/* Content Body */}
+            <div style={{ overflowY: 'auto', flex: 1, padding: '32px', background: '#f8fafc' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                
+                {selectedStudent.apoderadosList && selectedStudent.apoderadosList.length > 0 ? (
+                  selectedStudent.apoderadosList.map((apod, idx) => (
+                    <div key={apod.id} style={{ background: '#ffffff', borderRadius: '10px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
+                      <div style={{ background: '#f1f5f9', padding: '12px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0' }}>
+                        <span style={{ fontSize: '0.9rem', fontWeight: '700', color: '#334155', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          <i className='bx bx-id-card' style={{ marginRight: '6px', color: '#0f766e' }}></i> {apod.parentesco ? apod.parentesco.replace('_', ' ') : 'Contacto'} Titular
+                        </span>
+                        <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#94a3b8', background: 'white', padding: '2px 8px', borderRadius: '20px', border: '1px solid #cbd5e1' }}>#{idx + 1}</span>
                       </div>
-                      <div style={{ padding: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                        <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>DNI</span><div style={{ fontWeight: '500' }}>{apod.dni || 'No registrado'}</div></div>
-                        <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Nombres y Apellidos</span><div style={{ fontWeight: '500' }}>{apod.nombres} {apod.apellido_paterno} {apod.apellido_materno}</div></div>
-                        <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Celular</span><div style={{ fontWeight: '500', color: apod.celular ? '#2563eb' : 'inherit' }}>{apod.celular ? <><i className='bx bx-phone' ></i> {apod.celular}</> : 'No registrado'}</div></div>
-                        <div><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Correo Electrónico</span><div style={{ fontWeight: '500', color: apod.correo ? '#8b5cf6' : 'inherit' }}>{apod.correo ? <><i className='bx bx-envelope' ></i> {apod.correo}</> : 'No registrado'}</div></div>
-                        <div style={{ gridColumn: 'span 2' }}><span style={{ color: '#64748b', fontSize: '0.8rem', display: 'block', marginBottom: '4px' }}>Domicilio</span><div style={{ fontWeight: '500' }}>{apod.domicilio || 'No especificado'}</div></div>
+                      
+                      <div style={{ padding: '24px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+                        <div style={{ gridColumn: 'span 2' }}>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Apellidos y Nombres Completos</label>
+                          <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {[apod.apellido_paterno, apod.apellido_materno, apod.nombres].filter(Boolean).join(' ') || '-'}
+                            {((apod.parentesco === 'padre' && (selectedStudent.vive_con === 'Ambos padres' || selectedStudent.vive_con === 'Solo Padre')) || 
+                              (apod.parentesco === 'madre' && (selectedStudent.vive_con === 'Ambos padres' || selectedStudent.vive_con === 'Solo Madre'))) && (
+                              <span style={{ fontSize: '0.7rem', background: '#dcfce7', color: '#166534', padding: '2px 8px', borderRadius: '12px', whiteSpace: 'nowrap' }}><i className='bx bx-home-alt-2'></i> Vive con el estudiante</span>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Rol en Institución</label>
+                          <div style={{ fontSize: '0.85rem', color: '#0f766e', fontWeight: '600', background: '#ccfbf1', display: 'inline-block', padding: '2px 10px', borderRadius: '12px' }}>{apod.es_apoderado_principal ? 'Apoderado Legal' : 'Familiar Referencial'}</div>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Doc. Identidad DNI</label>
+                          <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{apod.dni || 'Sin Documento'}</div>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Teléfono Celular</label>
+                          <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{apod.celular || '-'}</div>
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Correo Electrónico</label>
+                          <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{apod.correo || '-'}</div>
+                        </div>
+                        <div style={{ gridColumn: 'span 3' }}>
+                          <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Dirección de Residencia Registrada</label>
+                          <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{apod.domicilio || '-'}</div>
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </>
-              )}
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px', background: '#ffffff', borderRadius: '10px', border: '1px dashed #cbd5e1' }}>
+                    <div style={{ width: '60px', height: '60px', background: '#f1f5f9', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: '2rem', color: '#94a3b8' }}><i className='bx bx-user-x'></i></div>
+                    <h3 style={{ fontSize: '1rem', fontWeight: '600', color: '#475569', marginBottom: '8px' }}>Lista Vacía</h3>
+                    <p style={{ color: '#94a3b8', fontSize: '0.85rem', margin: 0 }}>El estudiante no cuenta con tutores asignados.</p>
+                  </div>
+                )}
 
+              </div>
             </div>
-            
-            <div style={{ padding: '1rem 1.5rem', background: '#f8fafc', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowGuardiansProfile(false)} className="btn" style={{ background: '#0f172a', color: 'white', padding: '0.6rem 1.5rem', borderRadius: '8px', fontWeight: '600', cursor: 'pointer', border: 'none' }}>Cerrar</button>
+
+             {/* Footer */}
+             <div style={{ padding: '16px 32px', background: '#ffffff', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'flex-end', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px' }}>
+              <button onClick={() => setShowGuardiansProfile(false)} className="btn" style={{ background: '#0f766e', color: 'white', border: 'none', fontWeight: '600', padding: '8px 24px', borderRadius: '8px' }}>Regresar</button>
             </div>
           </div>
         </div>

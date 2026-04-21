@@ -1,4 +1,4 @@
-﻿:root {
+:root {
     --primary: #1e293b;
     --primary-hover: #0f172a;
     --secondary: #2563eb;
@@ -242,6 +242,201 @@ a:hover {
 
 /* Dashboard Layout */
 .dashboard-wrapper {
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    color: #0f172a;
+    letter-spacing: -0.015em;
+}
+
+a {
+    text-decoration: none;
+    color: var(--primary);
+    transition: var(--transition);
+}
+
+a:hover {
+    color: var(--secondary);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+}
+
+/* Authentication Layout */
+.auth-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+.auth-wrapper::before {
+    content: '';
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(37, 99, 235, 0.1) 0%, transparent 70%);
+    top: -200px;
+    right: -200px;
+}
+
+.auth-card {
+    background: var(--card-bg);
+    padding: 3rem;
+    border-radius: 16px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+    width: 100%;
+    max-width: 420px;
+    animation: slideUp 0.6s ease;
+    position: relative;
+    z-index: 10;
+}
+
+.auth-card h2 {
+    text-align: center;
+    margin-bottom: 0.5rem;
+    font-size: 1.5rem;
+}
+
+.auth-card p {
+    text-align: center;
+    color: var(--text-muted);
+    margin-bottom: 2rem;
+    font-size: 0.9rem;
+}
+
+/* Forms */
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: var(--text-color);
+    font-size: 0.85rem;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    transition: all var(--transition);
+    background-color: #f8fafc;
+    color: var(--text-color);
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: var(--secondary);
+    background-color: #fff;
+    box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+}
+
+.form-control:disabled, .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.form-control.is-invalid {
+    border-color: var(--danger);
+}
+.form-control.is-invalid:focus {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.1);
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.25rem;
+    font-weight: 500;
+    text-align: center;
+    border-radius: 8px;
+    cursor: pointer;
+    border: none;
+    transition: all var(--transition);
+    font-size: 0.9rem;
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    color: #fff;
+    box-shadow: 0 4px 6px -1px rgba(30, 41, 59, 0.2);
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 15px -3px rgba(30, 41, 59, 0.2);
+}
+
+.btn-secondary {
+    background-color: var(--secondary);
+    color: #fff;
+    box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.2);
+}
+
+.btn-secondary:hover {
+    background-color: var(--secondary-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 15px -3px rgba(37, 99, 235, 0.2);
+}
+
+.btn-danger {
+    background-color: white;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+}
+
+.btn-danger:hover {
+    background-color: #fef2f2;
+}
+
+.btn-success {
+    background-color: var(--success);
+    color: white;
+}
+
+.btn-success:hover {
+    background-color: #059669;
+}
+
+.btn-block {
+    width: 100%;
+}
+
+.btn-sm {
+    padding: 0.4rem 0.85rem;
+    font-size: 0.8rem;
+}
+
+/* Dashboard Layout */
+.dashboard-wrapper {
     display: flex;
     min-height: 100vh;
 }
@@ -255,6 +450,10 @@ a:hover {
     flex-direction: column;
     flex-shrink: 0;
     z-index: 20;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
 }
 
 .sidebar-header {
@@ -629,3 +828,90 @@ a:hover {
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #475569; }
 
 @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+.table-row-hover:hover { background-color: #f8fafc !important; }
+
+/* Dashboard Premium Responsive */
+.dash-header {
+  margin-bottom: 2.5rem;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  padding: 2.5rem;
+  border-radius: 20px;
+  color: white;
+  box-shadow: 0 20px 40px -10px rgba(15, 23, 42, 0.2), inset 0 1px 0 rgba(255,255,255,0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.dash-header-actions {
+  display: flex; 
+  gap: 15px; 
+  position: relative; 
+  z-index: 2;
+}
+
+.dash-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2.5rem;
+}
+
+.dash-kpi-col {
+  grid-column: span 3;
+}
+
+.dash-alert-col {
+  grid-column: span 6;
+}
+
+.dash-bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: 2rem;
+}
+
+.dash-gender-dist {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+@media (max-width: 1024px) {
+  .dash-kpi-col { grid-column: span 6; }
+  .dash-alert-col { grid-column: span 12; }
+  .dash-bottom-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  .dash-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1.8rem;
+    gap: 1.5rem;
+  }
+  .dash-header h2 {
+    font-size: 1.8rem !important;
+  }
+  .dash-header p {
+    font-size: 0.95rem !important;
+  }
+  .dash-header-actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .dash-header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .dash-kpi-col { grid-column: span 12; }
+  .dash-gender-dist { flex-direction: column; }
+  .dash-gender-dist > div { width: 100%; }
+  
+  .page-content {
+      padding: 1.25rem !important;
+  }
+}

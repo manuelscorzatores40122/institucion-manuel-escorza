@@ -8,6 +8,7 @@ import Topbar from './Topbar';
 
 export default function DashboardLayoutClient({ user, children }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const timeoutRef = useRef(null);
@@ -39,11 +40,31 @@ export default function DashboardLayoutClient({ user, children }) {
     };
   }, []);
 
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname]);
+
+  const toggleSidebar = () => {
+    if (window.innerWidth <= 768) {
+      setIsMobileOpen(!isMobileOpen);
+    } else {
+      setIsCollapsed(!isCollapsed);
+    }
+  };
+
   return (
     <div className={`dashboard-wrapper ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
       <Toaster position="bottom-right" richColors />
+      
+      {/* Sidebar Overlay for Mobile */}
+      <div 
+        className={`sidebar-overlay ${isMobileOpen ? 'active' : ''}`} 
+        onClick={() => setIsMobileOpen(false)}
+      ></div>
+
       {/* Sidebar */}
-      <aside className="sidebar" style={{ width: isCollapsed ? '0' : '270px', overflow: 'hidden', transition: 'width 0.3s ease', padding: isCollapsed ? '0' : '' }}>
+      <aside className={`sidebar ${isMobileOpen ? 'open' : ''}`} style={{ width: isCollapsed ? '0' : '270px', overflow: 'hidden', padding: isCollapsed ? '0' : '' }}>
         <div className="sidebar-header" style={{ opacity: isCollapsed ? 0 : 1, transition: 'opacity 0.2s', whiteSpace: 'nowrap' }}>
           <img src="/logo.png" alt="Logo I.E. Manuel Scorza" style={{ height: '40px', width: 'auto' }} />
           <h2>I.E. Manuel Scorza</h2>
@@ -74,7 +95,7 @@ export default function DashboardLayoutClient({ user, children }) {
 
       {/* Main Content */}
       <main className="main-content" style={{ transition: 'margin 0.3s ease', width: '100%' }}>
-        <Topbar user={user} isCollapsed={isCollapsed} toggleSidebar={() => setIsCollapsed(!isCollapsed)} />
+        <Topbar user={user} isCollapsed={isCollapsed} toggleSidebar={toggleSidebar} />
 
         <div className="page-content">
           {children}

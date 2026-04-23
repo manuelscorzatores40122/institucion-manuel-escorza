@@ -298,7 +298,7 @@ export default function CreateStudentClient({ options }) {
                 <input type="email" className="form-control" id="email" name="email" value={formData.email || ''} onChange={handleInputChange} placeholder="ejemplo@escuela.edu.pe" />
               </div>
 
-              <div className="form-group" style={{ gridColumn: 'span 2', background: '#f1f5f9', padding: '10px', borderRadius: '6px', borderLeft: '4px solid var(--primary)' }}>
+              <div className="form-group" style={{ gridColumn: 'span 2', background: '#f1f5f9', color: '#0f172a', padding: '10px', borderRadius: '6px', borderLeft: '4px solid var(--primary)' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', margin: 0 }}>
                   <input type="checkbox" checked={formData.departamento_nacimiento === 'EXTRANJERO'} onChange={(e) => {
                     const isExt = e.target.checked;
@@ -309,7 +309,7 @@ export default function CreateStudentClient({ options }) {
                       distrito_nacimiento: isExt ? 'EXTRANJERO' : ''
                     }));
                   }} style={{ width: '18px', height: '18px' }} />
-                  <span style={{ fontWeight: 'bold' }}>Estudiante Extranjero (No nació en Perú)</span>
+                  <span style={{ fontWeight: 'bold', color: '#0f172a' }}>Estudiante Extranjero (No nació en Perú)</span>
                 </label>
               </div>
 

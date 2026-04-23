@@ -255,19 +255,69 @@ export default function GuardiansIndexClient() {
             Mostrando {data.from || 0} a {data.to || 0} de {data.total}
           </div>
           <div className="d-flex gap-1" style={{ display: 'flex', gap: '4px' }}>
-            {data.links.map((link, idx) => (
-              <button key={idx} className="btn btn-sm"
-                disabled={!link.url}
-                style={{
-                  background: link.active ? 'var(--primary)' : 'white',
-                  color: link.active ? 'white' : 'var(--text-color)',
-                  border: '1px solid #e2e8f0',
-                  opacity: !link.url ? 0.5 : 1
-                }}
-                onClick={() => link.url && handlePageChange(parseInt(link.label))}>
-                {link.label}
-              </button>
-            ))}
+            {(() => {
+              const currentPage = parseInt(filters.page) || 1;
+              const lastPage = data.last_page || 1;
+              let pages = [];
+              if (lastPage <= 7) {
+                for (let i = 1; i <= lastPage; i++) pages.push(i);
+              } else {
+                if (currentPage <= 4) {
+                  pages = [1, 2, 3, 4, 5, '...', lastPage];
+                } else if (currentPage >= lastPage - 3) {
+                  pages = [1, '...', lastPage - 4, lastPage - 3, lastPage - 2, lastPage - 1, lastPage];
+                } else {
+                  pages = [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', lastPage];
+                }
+              }
+              return (
+                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                  <button 
+                    className="btn btn-sm" 
+                    disabled={currentPage === 1}
+                    onClick={() => handlePageChange(currentPage - 1)}
+                    style={{ background: 'white', color: currentPage === 1 ? '#cbd5e1' : '#475569', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.4rem 0.6rem', fontWeight: '600', transition: 'all 0.2s', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
+                  >
+                    <i className='bx bx-chevron-left' style={{ fontSize: '1.2rem' }}></i>
+                  </button>
+                  {pages.map((p, idx) => (
+                    <button 
+                      key={idx} 
+                      className="btn btn-sm"
+                      disabled={p === '...'}
+                      onClick={() => p !== '...' && handlePageChange(p)}
+                      style={{
+                        background: p === currentPage ? 'linear-gradient(135deg, #0f766e, #14b8a6)' : p === '...' ? 'transparent' : 'white',
+                        color: p === currentPage ? 'white' : '#475569',
+                        border: p === '...' ? 'none' : p === currentPage ? 'none' : '1px solid #e2e8f0',
+                        borderRadius: '8px',
+                        minWidth: '36px',
+                        height: '36px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: p === currentPage ? '700' : '600',
+                        boxShadow: p === currentPage ? '0 4px 10px -2px rgba(15, 118, 110, 0.5)' : 'none',
+                        transition: 'all 0.2s',
+                        cursor: p === '...' ? 'default' : 'pointer'
+                      }}
+                      onMouseOver={e => { if (p !== '...' && p !== currentPage) e.currentTarget.style.background = '#f8fafc'; }}
+                      onMouseOut={e => { if (p !== '...' && p !== currentPage) e.currentTarget.style.background = 'white'; }}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                  <button 
+                    className="btn btn-sm" 
+                    disabled={currentPage === lastPage}
+                    onClick={() => handlePageChange(currentPage + 1)}
+                    style={{ background: 'white', color: currentPage === lastPage ? '#cbd5e1' : '#475569', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '0.4rem 0.6rem', fontWeight: '600', transition: 'all 0.2s', cursor: currentPage === lastPage ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center' }}
+                  >
+                    <i className='bx bx-chevron-right' style={{ fontSize: '1.2rem' }}></i>
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </div>
       )}

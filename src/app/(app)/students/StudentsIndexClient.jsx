@@ -288,9 +288,9 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
 
   return (
     <div className="card">
-      <div className="card-header d-flex justify-between align-center" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-        <h2 id="mainTitle">{isEgresadosView ? 'Estudiantes Egresados / Exalumnos' : 'Gestión de Estudiantes Activos'}</h2>
-        <div className="d-flex gap-2" style={{ display: 'flex', gap: '0.5rem' }}>
+      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+        <h2 id="mainTitle" style={{ margin: 0, fontSize: '1.4rem' }}>{isEgresadosView ? 'Estudiantes Egresados' : 'Estudiantes Activos'}</h2>
+        <div className="d-flex gap-2 header-actions-mobile" style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <button id="toggleEgresadosBtn" className="btn" style={{ background: isEgresadosView ? 'var(--primary)' : 'var(--text-color)', color: 'white' }} onClick={toggleEgresados}>
             {isEgresadosView ? <><i className='bx bx-arrow-back'></i> Volver a Activos</> : <><i className='bx bxs-graduation'></i> Ver Egresados</>}
           </button>
@@ -330,8 +330,8 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
         </div>
       </div>
 
-      <div className="filters-container mb-4 p-3" style={{ background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', padding: '1rem' }}>
-        <form id="filterForm" className="grid grid-cols-1 md-grid-cols-4 gap-3" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '1rem' }}>
+      <div className="filters-container mb-4 p-3" style={{ background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', padding: '1rem', overflowX: 'auto' }}>
+        <form id="filterForm" className="grid grid-cols-4" style={{ display: 'grid', gap: '1rem' }}>
           <div className="form-group mb-0" style={{ gridColumn: '1 / -1' }}>
             <label className="form-label"><i className='bx bx-search'></i> Búsqueda por texto</label>
             <input type="text" name="search" className="form-control" placeholder="Buscar por DNI, Cód. Estudiante, Nombres, Apellidos" value={filters.search} onChange={handleFilterChange} autoComplete="off" />
@@ -541,11 +541,11 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
 
                   {/* MODAL PERFIL ESTUDIANTE - MODERN SAAS */}
       {selectedStudent && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100000, padding: '2rem', animation: 'fadeIn 0.2s ease-out' }}>
-          <div style={{ background: '#ffffff', borderRadius: '12px', maxWidth: '850px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100000, padding: '1rem', animation: 'fadeIn 0.2s ease-out' }}>
+          <div style={{ background: '#ffffff', borderRadius: '12px', maxWidth: '850px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', display: 'flex', flexDirection: 'column', maxHeight: '95vh', overflow: 'hidden' }}>
             
             {/* Header Vívido pero Profesional */}
-            <div style={{ background: 'linear-gradient(to right, #1e3a8a, #3b82f6)', padding: '24px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'white' }}>
+            <div style={{ background: 'linear-gradient(to right, #1e3a8a, #3b82f6)', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'white', flexWrap: 'wrap', gap: '10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', fontWeight: 'bold', border: '2px solid rgba(255,255,255,0.4)', backdropFilter: 'blur(4px)' }}>
                   {selectedStudent.nombres.charAt(0)}{selectedStudent.apellido_paterno.charAt(0)}
@@ -562,16 +562,16 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
             </div>
 
             {/* Content Body */}
-            <div style={{ overflowY: 'auto', flex: 1, padding: '32px', background: '#f8fafc' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{ overflowY: 'auto', flex: 1, padding: '20px', background: '#f8fafc' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                 
                 {/* Panel 1: Datos Personales */}
-                <div style={{ background: '#ffffff', borderRadius: '10px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
-                  <h3 style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '20px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
+                <div style={{ background: '#ffffff', borderRadius: '10px', padding: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: '700', color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '15px', paddingBottom: '12px', borderBottom: '1px solid #f1f5f9' }}>
                     <div style={{ background: '#e0f2fe', color: '#0369a1', padding: '6px', borderRadius: '6px', display: 'flex' }}><i className='bx bx-user'></i></div>
                     Información Personal
                   </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+                  <div className="grid grid-cols-3" style={{ gap: '15px' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Edad</label>
                       <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '500' }}>{getEdad(selectedStudent.fecha_nacimiento)}</div>
@@ -596,7 +596,7 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
                 </div>
 
                 {/* Grid para Panel Académico & Apoderados Resumen */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '24px' }}>
+                <div className="grid grid-cols-2" style={{ gap: '20px' }}>
                   
                   {/* Académico */}
                   <div style={{ background: '#ffffff', borderRadius: '10px', padding: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #e2e8f0' }}>
@@ -674,11 +674,11 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
 
       {/* MODAL PERFIL APODERADOS - MODERN SAAS */}
       {showGuardiansProfile && selectedStudent && (
-        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100005, padding: '2rem', animation: 'fadeIn 0.2s ease-out' }}>
-          <div style={{ background: '#ffffff', borderRadius: '12px', maxWidth: '850px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', display: 'flex', flexDirection: 'column', maxHeight: '90vh', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 100005, padding: '1rem', animation: 'fadeIn 0.2s ease-out' }}>
+          <div style={{ background: '#ffffff', borderRadius: '12px', maxWidth: '850px', width: '100%', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', display: 'flex', flexDirection: 'column', maxHeight: '95vh', overflow: 'hidden' }}>
             
             {/* Header Vívido pero Profesional */}
-            <div style={{ background: 'linear-gradient(to right, #0f766e, #14b8a6)', padding: '24px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'white' }}>
+            <div style={{ background: 'linear-gradient(to right, #0f766e, #14b8a6)', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: 'white', flexWrap: 'wrap', gap: '10px' }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: '1.4rem', fontWeight: '700', letterSpacing: '0.01em', display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div style={{ background: 'rgba(255,255,255,0.2)', padding: '8px', borderRadius: '8px', display: 'flex' }}><i className='bx bx-group'></i></div>
@@ -705,7 +705,7 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
                         <span style={{ fontSize: '0.75rem', fontWeight: '600', color: '#94a3b8', background: 'white', padding: '2px 8px', borderRadius: '20px', border: '1px solid #cbd5e1' }}>#{idx + 1}</span>
                       </div>
                       
-                      <div style={{ padding: '24px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+                      <div className="grid grid-cols-2" style={{ padding: '20px', gap: '15px' }}>
                         <div style={{ gridColumn: 'span 2' }}>
                           <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: '600', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Apellidos y Nombres Completos</label>
                           <div style={{ fontSize: '0.9rem', color: '#0f172a', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>

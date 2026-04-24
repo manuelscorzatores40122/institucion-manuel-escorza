@@ -40,9 +40,16 @@ export default function DashboardLayoutClient({ user, children }) {
     };
   }, []);
 
-  // Close mobile sidebar on route change
+  // Collapse sidebar on route change to heavy-data views to give full screen
   useEffect(() => {
     setIsMobileOpen(false);
+    if (
+      pathname?.startsWith('/students') || 
+      pathname?.startsWith('/guardians') || 
+      pathname?.startsWith('/enrollments')
+    ) {
+      setIsCollapsed(true);
+    }
   }, [pathname]);
 
   const toggleSidebar = () => {

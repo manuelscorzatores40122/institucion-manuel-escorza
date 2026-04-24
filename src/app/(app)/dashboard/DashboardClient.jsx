@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
-import { 
+import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   BarChart, Bar, PieChart, Pie, Cell, Legend
 } from 'recharts';
@@ -37,7 +37,7 @@ export default function DashboardClient({ stats }) {
   };
 
   return (
-    <motion.div 
+    <motion.div
       variants={containerVariants}
       initial="hidden"
       animate="show"
@@ -55,13 +55,13 @@ export default function DashboardClient({ stats }) {
           </p>
         </div>
         <div className="dash-header-actions">
-          <Link href="/students/create" className="btn" style={{ 
-            background: 'rgba(255, 255, 255, 0.05)', 
-            backdropFilter: 'blur(10px)', 
-            border: '1px solid rgba(255,255,255,0.1)', 
-            color: 'white', 
-            fontWeight: '600', 
-            padding: '0.8rem 1.4rem', 
+          <Link href="/students/create" className="btn" style={{
+            background: 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(10px)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            color: 'white',
+            fontWeight: '600',
+            padding: '0.8rem 1.4rem',
             borderRadius: '12px',
             fontSize: '0.95rem',
             display: 'flex', alignItems: 'center', gap: '8px',
@@ -69,12 +69,12 @@ export default function DashboardClient({ stats }) {
           }}>
             <i className='bx bx-user-plus' style={{ fontSize: '1.2rem' }}></i> Nuevo Alumno
           </Link>
-          <Link href="/enrollments/create" className="btn" style={{ 
-            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
-            border: 'none', 
-            color: 'white', 
-            fontWeight: '600', 
-            padding: '0.8rem 1.4rem', 
+          <Link href="/enrollments/create" className="btn" style={{
+            background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+            border: 'none',
+            color: 'white',
+            fontWeight: '600',
+            padding: '0.8rem 1.4rem',
             borderRadius: '12px',
             fontSize: '0.95rem',
             display: 'flex', alignItems: 'center', gap: '8px',
@@ -95,17 +95,17 @@ export default function DashboardClient({ stats }) {
           { label: 'Usuarios', value: stats.usuarios, icon: 'bx-user-circle', color: '#8b5cf6', bg: '#f5f3ff', span: 3, link: '/users' }
         ].map((kpi, idx) => {
           const cardContent = (
-            <motion.div 
+            <motion.div
               whileHover={{ y: -5, scale: 1.02 }}
-              style={{ 
-                background: 'white', 
-                borderRadius: '20px', 
-                padding: '24px', 
-                border: '1px solid rgba(226, 232, 240, 0.8)', 
-                boxShadow: '0 10px 25px -5px rgba(0,0,0,0.02), 0 4px 10px -5px rgba(0,0,0,0.01)', 
-                display: 'flex', 
-                flexDirection: 'column', 
-                justifyContent: 'center', 
+              style={{
+                background: 'white',
+                borderRadius: '20px',
+                padding: '24px',
+                border: '1px solid rgba(226, 232, 240, 0.8)',
+                boxShadow: '0 10px 25px -5px rgba(0,0,0,0.02), 0 4px 10px -5px rgba(0,0,0,0.01)',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
                 height: '100%',
                 cursor: kpi.link ? 'pointer' : 'default'
               }}
@@ -114,7 +114,7 @@ export default function DashboardClient({ stats }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <p style={{ margin: 0, color: '#64748b', fontSize: '0.85rem', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{kpi.label}</p>
-                  <motion.h3 
+                  <motion.h3
                     initial={{ scale: 0.5, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{ type: 'spring', delay: 0.2 + (idx * 0.1) }}
@@ -123,15 +123,15 @@ export default function DashboardClient({ stats }) {
                     {kpi.value}
                   </motion.h3>
                 </div>
-                <div style={{ 
-                  background: kpi.bg, 
-                  color: kpi.color, 
-                  width: '60px', 
-                  height: '60px', 
-                  borderRadius: '16px', 
-                  fontSize: '2rem', 
-                  display: 'flex', 
-                  alignItems: 'center', 
+                <div style={{
+                  background: kpi.bg,
+                  color: kpi.color,
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '16px',
+                  fontSize: '2rem',
+                  display: 'flex',
+                  alignItems: 'center',
                   justifyContent: 'center',
                   boxShadow: `0 8px 16px -8px ${kpi.color}`
                 }}>
@@ -160,34 +160,34 @@ export default function DashboardClient({ stats }) {
           const isActive = alert.value > 0;
           return (
             <Link key={idx} href={alert.link} className="dash-alert-col" style={{ textDecoration: 'none', display: 'block' }}>
-              <motion.div 
+              <motion.div
                 whileHover={isActive ? { scale: 1.02 } : {}}
-                style={{ 
-                  background: isActive ? alert.bgAlert : 'white', 
-                  borderRadius: '20px', 
-                  padding: '24px', 
-                  border: `1px solid ${isActive ? alert.borderAlert : 'rgba(226, 232, 240, 0.8)'}`, 
-                  boxShadow: isActive ? `0 10px 25px -5px ${alert.borderAlert}40` : '0 10px 25px -5px rgba(0,0,0,0.02)', 
-                  position: 'relative', 
-                  overflow: 'hidden', 
+                style={{
+                  background: isActive ? alert.bgAlert : 'white',
+                  borderRadius: '20px',
+                  padding: '24px',
+                  border: `1px solid ${isActive ? alert.borderAlert : 'rgba(226, 232, 240, 0.8)'}`,
+                  boxShadow: isActive ? `0 10px 25px -5px ${alert.borderAlert}40` : '0 10px 25px -5px rgba(0,0,0,0.02)',
+                  position: 'relative',
+                  overflow: 'hidden',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between'
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: '20px', position: 'relative', zIndex: 2 }}>
-                  <motion.div 
+                  <motion.div
                     animate={isActive ? { rotate: [0, -10, 10, -10, 10, 0] } : {}}
                     transition={{ repeat: Infinity, repeatDelay: 5, duration: 0.5 }}
-                    style={{ 
-                      background: isActive ? alert.iconBgAlert : '#f8fafc', 
-                      color: isActive ? alert.iconColorAlert : '#94a3b8', 
-                      width: '60px', 
-                      height: '60px', 
-                      borderRadius: '16px', 
-                      fontSize: '2rem', 
-                      display: 'flex', 
-                      alignItems: 'center', 
+                    style={{
+                      background: isActive ? alert.iconBgAlert : '#f8fafc',
+                      color: isActive ? alert.iconColorAlert : '#94a3b8',
+                      width: '60px',
+                      height: '60px',
+                      borderRadius: '16px',
+                      fontSize: '2rem',
+                      display: 'flex',
+                      alignItems: 'center',
                       justifyContent: 'center',
                       boxShadow: isActive ? `0 8px 16px -8px ${alert.iconColorAlert}` : 'none'
                     }}
@@ -214,36 +214,36 @@ export default function DashboardClient({ stats }) {
         {/* PANEL IZQUIERDO */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
           {/* Gráfico de Tendencias */}
-          <div style={{ 
-            background: 'white', 
-            borderRadius: '24px', 
-            padding: '30px', 
-            border: '1px solid rgba(226, 232, 240, 0.8)', 
-            boxShadow: '0 10px 30px -10px rgba(0,0,0,0.03)' 
+          <div style={{
+            background: 'white',
+            borderRadius: '24px',
+            padding: '30px',
+            border: '1px solid rgba(226, 232, 240, 0.8)',
+            boxShadow: '0 10px 30px -10px rgba(0,0,0,0.03)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '25px' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ background: '#ecfdf5', color: '#10b981', padding: '6px', borderRadius: '8px', display: 'flex' }}><i className='bx bx-trending-up'></i></div> 
+                  <div style={{ background: '#ecfdf5', color: '#10b981', padding: '6px', borderRadius: '8px', display: 'flex' }}><i className='bx bx-trending-up'></i></div>
                   Tendencia de Matrículas
                 </h3>
                 <p style={{ margin: '4px 0 0', fontSize: '0.9rem', color: '#64748b', fontWeight: '500' }}>Evolución mensual (Año Actual)</p>
               </div>
             </div>
-            
+
             <div style={{ height: '240px', width: '100%', marginLeft: '-15px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={trendsData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="colorMatriculas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b' }} />
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }}
                     itemStyle={{ color: '#0f172a', fontWeight: '700' }}
                   />
@@ -254,25 +254,25 @@ export default function DashboardClient({ stats }) {
           </div>
 
           {/* Últimos Ingresos */}
-          <div style={{ 
-            background: 'white', 
-            borderRadius: '24px', 
-            border: '1px solid rgba(226, 232, 240, 0.8)', 
-            overflow: 'hidden', 
-            boxShadow: '0 10px 30px -10px rgba(0,0,0,0.03)' 
+          <div style={{
+            background: 'white',
+            borderRadius: '24px',
+            border: '1px solid rgba(226, 232, 240, 0.8)',
+            overflow: 'hidden',
+            boxShadow: '0 10px 30px -10px rgba(0,0,0,0.03)'
           }}>
             <div style={{ padding: '24px 30px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ background: '#eef2ff', color: '#6366f1', padding: '6px', borderRadius: '8px', display: 'flex' }}><i className='bx bx-history'></i></div> 
+                  <div style={{ background: '#eef2ff', color: '#6366f1', padding: '6px', borderRadius: '8px', display: 'flex' }}><i className='bx bx-history'></i></div>
                   Últimos Ingresos
                 </h3>
               </div>
-              <Link href="/students" style={{ 
-                fontSize: '0.9rem', color: '#3b82f6', fontWeight: '600', textDecoration: 'none', background: '#eff6ff', padding: '6px 12px', borderRadius: '8px', transition: 'all 0.2s' 
+              <Link href="/students" style={{
+                fontSize: '0.9rem', color: '#3b82f6', fontWeight: '600', textDecoration: 'none', background: '#eff6ff', padding: '6px 12px', borderRadius: '8px', transition: 'all 0.2s'
               }}>Ver Todos</Link>
             </div>
-            
+
             <div style={{ padding: '0 10px', overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
@@ -287,7 +287,7 @@ export default function DashboardClient({ stats }) {
                     <tr><td colSpan="3" style={{ padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '0.95rem' }}>No hay registros disponibles.</td></tr>
                   )}
                   {stats.recent.map((r, i) => (
-                    <motion.tr 
+                    <motion.tr
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.5 + (i * 0.1) }}
@@ -325,14 +325,14 @@ export default function DashboardClient({ stats }) {
 
         {/* PANEL DERECHO */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          
+
           {/* Cobertura por Nivel */}
           <div style={{ background: 'white', border: '1px solid rgba(226, 232, 240, 0.8)', borderRadius: '24px', padding: '30px', boxShadow: '0 10px 30px -10px rgba(0,0,0,0.03)' }}>
             <h3 style={{ margin: '0 0 20px', fontSize: '1.15rem', color: '#0f172a', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ background: '#f5f3ff', color: '#8b5cf6', padding: '6px', borderRadius: '8px', display: 'flex' }}><i className='bx bx-pie-chart-alt-2'></i></div> 
+              <div style={{ background: '#f5f3ff', color: '#5012e2ff', padding: '6px', borderRadius: '8px', display: 'flex' }}><i className='bx bx-pie-chart-alt-2'></i></div>
               Cobertura por Nivel
             </h3>
-            
+
             <div style={{ height: '220px', width: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -359,7 +359,7 @@ export default function DashboardClient({ stats }) {
           {/* Distribución de Género */}
           <div style={{ background: 'white', border: '1px solid rgba(226, 232, 240, 0.8)', borderRadius: '24px', padding: '30px', boxShadow: '0 10px 30px -10px rgba(0,0,0,0.03)' }}>
             <h3 style={{ margin: '0 0 20px', fontSize: '1.15rem', color: '#0f172a', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ background: '#fdf4ff', color: '#d946ef', padding: '6px', borderRadius: '8px', display: 'flex' }}><i className='bx bx-male-female'></i></div> 
+              <div style={{ background: '#fdf4ff', color: '#d946ef', padding: '6px', borderRadius: '8px', display: 'flex' }}><i className='bx bx-male-female'></i></div>
               Distribución de Género
             </h3>
             <div className="dash-gender-dist">
@@ -385,7 +385,7 @@ export default function DashboardClient({ stats }) {
           {/* Próximos Cumpleaños */}
           <div style={{ background: 'white', border: '1px solid rgba(226, 232, 240, 0.8)', borderRadius: '24px', padding: '30px', boxShadow: '0 10px 30px -10px rgba(0,0,0,0.03)' }}>
             <h3 style={{ margin: '0 0 20px', fontSize: '1.15rem', color: '#0f172a', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ background: '#fffbeb', color: '#f59e0b', padding: '6px', borderRadius: '8px', display: 'flex' }}><i className='bx bx-cake'></i></div> 
+              <div style={{ background: '#fffbeb', color: '#f59e0b', padding: '6px', borderRadius: '8px', display: 'flex' }}><i className='bx bx-cake'></i></div>
               Próximos Cumpleaños
             </h3>
             {stats.birthdays.length === 0 ? (
@@ -396,7 +396,7 @@ export default function DashboardClient({ stats }) {
             ) : (
               <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 {stats.birthdays.map((b, i) => (
-                  <motion.li 
+                  <motion.li
                     initial={{ opacity: 0, x: 20 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.6 + (i * 0.1) }}

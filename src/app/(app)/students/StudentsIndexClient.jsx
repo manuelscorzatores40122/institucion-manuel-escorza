@@ -330,11 +330,13 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
         </div>
       </div>
 
-      <div className="filters-container mb-4 p-3" style={{ background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', padding: '1rem', overflowX: 'auto' }}>
-        <form id="filterForm" className="grid grid-cols-4" style={{ display: 'grid', gap: '1rem' }}>
-          <div className="form-group mb-0" style={{ gridColumn: '1 / -1' }}>
-            <label className="form-label"><i className='bx bx-search'></i> Búsqueda por texto</label>
-            <input type="text" name="search" className="form-control" placeholder="Buscar por DNI, Cód. Estudiante, Nombres, Apellidos" value={filters.search} onChange={handleFilterChange} autoComplete="off" />
+      <div className="filters-container mb-4 p-3 mobile-filters-container" style={{ background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '1.5rem', padding: '1rem', overflowX: 'auto' }}>
+        <form id="filterForm" className="grid grid-cols-4 mobile-chip-filters" style={{ display: 'grid', gap: '1rem' }}>
+          <div className="form-group mb-0 search-bar-mobile" style={{ gridColumn: '1 / -1' }}>
+            <div style={{ position: 'relative' }}>
+              <i className='bx bx-search' style={{ position: 'absolute', top: '50%', transform: 'translateY(-50%)', left: '12px', color: '#94a3b8', fontSize: '1.2rem' }}></i>
+              <input type="text" name="search" className="form-control" placeholder="Buscar DNI, nombre, apoderado..." value={filters.search} onChange={handleFilterChange} autoComplete="off" style={{ paddingLeft: '38px', borderRadius: '12px' }} />
+            </div>
             {filters.orphans === '1' && (
               <div style={{ marginTop: '0.5rem' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', background: '#fee2e2', color: '#991b1b', padding: '4px 10px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: '600' }}>
@@ -359,36 +361,32 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
             )}
           </div>
 
-          <div className="form-group mb-0">
-            <label className="form-label">Año Escolar</label>
-            <select name="anio_id" className="form-control" value={filters.anio_id} onChange={handleFilterChange}>
-              <option value="">Todos</option>
-              {anios?.map(a => <option key={a.id} value={a.id}>{a.anio}</option>)}
+          <div className="form-group mb-0 mobile-chip-select-wrapper">
+            <select name="anio_id" className="form-control mobile-chip-select" value={filters.anio_id} onChange={handleFilterChange}>
+              <option value="">Año escolar</option>
+              {anios?.map(a => <option key={a.id} value={a.id}>Año {a.anio}</option>)}
             </select>
           </div>
 
-          <div className="form-group mb-0">
-            <label className="form-label">Nivel</label>
-            <select name="nivel_id" className="form-control" value={filters.nivel_id} onChange={handleFilterChange}>
-              <option value="">Todos</option>
+          <div className="form-group mb-0 mobile-chip-select-wrapper">
+            <select name="nivel_id" className="form-control mobile-chip-select" value={filters.nivel_id} onChange={handleFilterChange}>
+              <option value="">Nivel</option>
               {niveles?.map(n => <option key={n.id} value={n.id}>{n.nombre}</option>)}
             </select>
           </div>
 
-          <div className="form-group mb-0">
-            <label className="form-label">Grado</label>
-            <select name="grado_id" className="form-control" value={filters.grado_id} onChange={handleFilterChange} disabled={!filters.nivel_id}>
-              <option value="">Todos</option>
+          <div className="form-group mb-0 mobile-chip-select-wrapper">
+            <select name="grado_id" className="form-control mobile-chip-select" value={filters.grado_id} onChange={handleFilterChange} disabled={!filters.nivel_id}>
+              <option value="">Grado</option>
               {grados?.filter(g => g.nivel_id == filters.nivel_id).map(g => (
                 <option key={g.id} value={g.id}>{g.nombre}</option>
               ))}
             </select>
           </div>
 
-          <div className="form-group mb-0">
-            <label className="form-label">Sección</label>
-            <select name="seccion_id" className="form-control" value={filters.seccion_id} onChange={handleFilterChange} disabled={!filters.grado_id}>
-              <option value="">Todas</option>
+          <div className="form-group mb-0 mobile-chip-select-wrapper">
+            <select name="seccion_id" className="form-control mobile-chip-select" value={filters.seccion_id} onChange={handleFilterChange} disabled={!filters.grado_id}>
+              <option value="">Sección</option>
               {secciones?.filter(s => s.grado_id == filters.grado_id).map(s => (
                 <option key={s.id} value={s.id}>{s.nombre}</option>
               ))}
@@ -433,7 +431,8 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
         )}
 
         {!loading && (
-          <table className="table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <>
+          <table className="table desktop-view-only" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
                 {isSelectionMode && (
@@ -509,6 +508,36 @@ export default function StudentsIndexClient({ initialFiltersParams }) {
               )}
             </tbody>
           </table>
+
+          {/* MOBILE VIEW CARDS */}
+          <div className="mobile-view-only">
+            {studentsData.data.length === 0 ? (
+              <div className="text-center p-4">No se encontraron estudiantes registrados.</div>
+            ) : (
+              studentsData.data.map(student => (
+                <div key={student.id} className="mobile-student-card">
+                  <div className="mobile-sc-avatar">
+                    {student.nombres ? student.nombres.charAt(0) : ''}
+                    {student.apellido_paterno ? student.apellido_paterno.charAt(0) : ''}
+                  </div>
+                  <div className="mobile-sc-info">
+                    <h4>{student.apellido_paterno} {student.apellido_materno}, {student.nombres?.split(' ')[0]}</h4>
+                    <p>DNI {student.dni || 'S/N'} · Est. #{student.id}</p>
+                    {student.gradoActual ? (
+                       <div className="mobile-sc-badge">{student.gradoActual}</div>
+                    ) : (
+                       <div className="mobile-sc-badge" style={{ color: '#ea580c', background: '#fff7ed', border: '1px solid #ffedd5' }}>Sin Matricular</div>
+                    )}
+                  </div>
+                  <div className="mobile-sc-actions">
+                    <span className="mobile-sc-phone">{student.celular || student.padre_celular || student.madre_celular || 'S/N'}</span>
+                    <button className="mobile-sc-more" onClick={() => setSelectedStudent(student)}>...</button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          </>
         )}
       </div>
 

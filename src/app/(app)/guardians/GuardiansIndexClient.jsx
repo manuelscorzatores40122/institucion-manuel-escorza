@@ -196,7 +196,8 @@ export default function GuardiansIndexClient() {
         )}
 
         {!loading && (
-          <table className="table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+          <>
+            <table className="table desktop-view-only" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e2e8f0' }}>
                 <th style={{ padding: '10px' }}>DNI</th>
@@ -244,6 +245,38 @@ export default function GuardiansIndexClient() {
               )}
             </tbody>
           </table>
+
+          {/* MOBILE VIEW CARDS */}
+          <div className="mobile-view-only">
+            {data.data.length === 0 ? (
+              <div className="text-center p-4">No se encontraron apoderados registrados.</div>
+            ) : (
+              data.data.map(item => (
+                <div key={item.id} className="mobile-student-card">
+                  <div className="mobile-sc-avatar" style={{ background: '#f0fdf4', color: '#15803d' }}>
+                    {item.nombres ? item.nombres.charAt(0) : ''}
+                    {item.apellido_paterno ? item.apellido_paterno.charAt(0) : ''}
+                  </div>
+                  <div className="mobile-sc-info">
+                    <h4>{item.apellido_paterno} {item.apellido_materno}, {item.nombres?.split(' ')[0]}</h4>
+                    <p>DNI {item.dni} · {item.parentesco || 'Apoderado'}</p>
+                    {item.estudiantes?.length > 0 ? (
+                       <div className="mobile-sc-badge" style={{ background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0' }}>
+                         {item.estudiantes.length} Estudiante(s)
+                       </div>
+                    ) : (
+                       <div className="mobile-sc-badge" style={{ color: '#ea580c', background: '#fff7ed', border: '1px solid #ffedd5' }}>Sin Estudiantes</div>
+                    )}
+                  </div>
+                  <div className="mobile-sc-actions">
+                    <span className="mobile-sc-phone">{item.celular || '-'}</span>
+                    <Link href={`/guardians/create?id=${item.id}`} className="mobile-sc-more" style={{ textDecoration: 'none' }}>✎</Link>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          </>
         )}
       </div>
 

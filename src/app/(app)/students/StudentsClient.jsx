@@ -206,7 +206,7 @@ export default function StudentsClient({ initialStudents }) {
 
       <div className="card">
         <h3 style={{ fontSize: '1.2rem', marginBottom: '15px' }}>Alumnos Registrados</h3>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+        <table className="desktop-view-only" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
           <thead>
             <tr style={{ background: '#f5f5f5', borderBottom: '2px solid #ddd' }}>
               <th style={{ padding: '10px' }}>DNI</th>
@@ -231,6 +231,32 @@ export default function StudentsClient({ initialStudents }) {
             ))}
           </tbody>
         </table>
+
+        {/* MOBILE VIEW CARDS */}
+        <div className="mobile-view-only">
+          {students.map(student => (
+            <div key={student.id} className="mobile-student-card">
+              <div className="mobile-sc-avatar">
+                {student.nombres ? student.nombres.charAt(0) : ''}
+                {student.apellido_paterno ? student.apellido_paterno.charAt(0) : ''}
+              </div>
+              <div className="mobile-sc-info">
+                <h4>{student.apellido_paterno} {student.apellido_materno}, {student.nombres?.split(' ')[0]}</h4>
+                <p>DNI {student.dni || 'S/N'} · ID #{student.id}</p>
+                {student.grado ? (
+                   <div className="mobile-sc-badge">{student.grado}</div>
+                ) : (
+                   <div className="mobile-sc-badge" style={{ color: '#ea580c', background: '#fff7ed', border: '1px solid #ffedd5' }}>Sin Matricular</div>
+                )}
+              </div>
+              <div className="mobile-sc-actions">
+                <span className="mobile-sc-phone">{student.celular || student.padre_celular || student.madre_celular || '-'}</span>
+                <button className="mobile-sc-more" onClick={() => handleEdit(student)}>✎</button>
+              </div>
+            </div>
+          ))}
+          <button className="btn btn-outline" style={{ width: '100%', marginTop: '10px', padding: '12px' }}>Ver más estudiantes</button>
+        </div>
         {students.length === 0 && <p style={{ marginTop: '10px', color: '#777' }}>No hay estudiantes registrados.</p>}
       </div>
       <ConfirmModal {...confirmConfig} />

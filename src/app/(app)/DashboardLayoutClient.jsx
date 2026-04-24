@@ -108,6 +108,30 @@ export default function DashboardLayoutClient({ user, children }) {
           {children}
         </div>
       </main>
+
+      {/* Mobile Bottom Navigation */}
+      <div className="mobile-bottom-nav">
+        <Link href="/dashboard" className={`bottom-nav-item ${pathname === '/dashboard' ? 'active' : ''}`}>
+          <i className='bx bx-grid-alt'></i>
+          <span>Inicio</span>
+        </Link>
+        <Link href="/students" className={`bottom-nav-item ${pathname?.startsWith('/students') ? 'active' : ''}`}>
+          <i className='bx bx-user'></i>
+          <span>Estudiantes</span>
+        </Link>
+        <Link href="/enrollments" className={`bottom-nav-item ${pathname?.startsWith('/enrollments') ? 'active' : ''}`}>
+          <i className='bx bx-file'></i>
+          <span>Matrículas</span>
+        </Link>
+        <Link href="/guardians" className={`bottom-nav-item ${pathname?.startsWith('/guardians') ? 'active' : ''}`}>
+          <i className='bx bx-group'></i>
+          <span>Apoderados</span>
+        </Link>
+        <div className="bottom-nav-item" onClick={() => setIsMobileOpen(true)}>
+          <i className='bx bx-dots-horizontal-rounded'></i>
+          <span>Más</span>
+        </div>
+      </div>
     </div>
   );
 }

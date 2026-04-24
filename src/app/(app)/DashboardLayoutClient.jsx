@@ -24,7 +24,7 @@ export default function DashboardLayoutClient({ user, children }) {
 
   useEffect(() => {
     const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'];
-    
+
     const resetTimeout = () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
       // 15 minutos en milisegundos = 15 * 60 * 1000 = 900000
@@ -56,10 +56,10 @@ export default function DashboardLayoutClient({ user, children }) {
   return (
     <div className={`dashboard-wrapper ${isCollapsed ? 'sidebar-collapsed' : ''}`}>
       <Toaster position="bottom-right" richColors />
-      
+
       {/* Sidebar Overlay for Mobile */}
-      <div 
-        className={`sidebar-overlay ${isMobileOpen ? 'active' : ''}`} 
+      <div
+        className={`sidebar-overlay ${isMobileOpen ? 'active' : ''}`}
         onClick={() => setIsMobileOpen(false)}
       ></div>
 
